@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build injected scripts
+        run: npm run build:inject
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Inject script tests
+        run: npm run test:inject
+
+      - name: Screen tests
+        run: npm run test:screens
+
+      - name: Expo doctor
+        run: npx expo-doctor
+
+      - name: Web export
+        run: npm run web
+
+      - name: Upload web export
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-export
+          path: dist
