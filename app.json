@@ -26,6 +26,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Unfeed to use the camera to scan QR codes"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#0b0b0d",
