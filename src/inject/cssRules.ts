@@ -25,6 +25,24 @@ export interface CssRule {
 
 const RULE_MARKER = /\/\*\s*@unfeed-rule\s+([A-Za-z0-9_-]+)\s+([^*]*)\*\//g;
 
+function splitSelectorList(selectorText: string): string[] {
+  const selectors: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const char of selectorText) {
+    if (char === '(') depth += 1;
+    else if (char === ')') depth -= 1;
+    if (char === ',' && depth === 0) {
+      selectors.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  if (current.trim()) selectors.push(current.trim());
+  return selectors.filter(Boolean);
+}
+
 function splitBlocks(css: string): CssRuleBlock[] {
   const blocks: CssRuleBlock[] = [];
   let index = 0;
@@ -36,10 +54,8 @@ function splitBlocks(css: string): CssRuleBlock[] {
     const selectorText = css.slice(index, open).trim();
     const body = css.slice(open + 1, close).trim();
     if (selectorText) {
-      blocks.push({
-        selectors: selectorText.split(',').map((selector) => selector.trim()).filter(Boolean),
-        body,
-      });
+      // Commas inside :is(), :has() and :not() do not split the list.
+      blocks.push({ selectors: splitSelectorList(selectorText), body });
     }
     index = close + 1;
   }
