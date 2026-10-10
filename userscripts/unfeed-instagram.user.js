@@ -1,0 +1,656 @@
+// ==UserScript==
+// @name Unfeed Instagram
+// @namespace https://github.com/dennycrafter/unfeed
+// @version 1.0.0
+// @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
+// @match https://instagram.com/*
+// @match https://www.instagram.com/*
+// @match https://m.instagram.com/*
+// @noframes
+// @grant none
+// @run-at document-start
+// ==/UserScript==
+
+"use strict";
+(() => {
+  // src/inject/css/instagram.css
+  var instagram_default = `/*
+  Unfeed hide rules for Instagram (charter section 8.4).
+
+  Every selector uses stable hooks only: href, aria-label, role and element
+  structure. Instagram rotates hashed class names weekly, so they are never
+  referenced here; the fixtures carry fake hashed classes to prove it.
+
+  Rules are named with marker comments parsed by src/inject/cssRules.ts:
+      @unfeed-rule <id> [scope=token,tokens] -- Title
+  Scope tokens come from src/inject/scopes.ts. A rule with no scope always
+  applies. The counts scope applies only while the hideCounts setting is on.
+*/
+
+/* @unfeed-rule ig-own-nav -- Instagram's own bottom navigation and top header, replaced by the native bars */
+nav:has(a[href="/explore/"]),
+nav:has(a[href="/reels/"]),
+header:has(svg[aria-label="Instagram"]),
+a[href="/"]:has(svg[aria-label="Instagram"]) {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */
+a[href^="/reels/"],
+a[href^="/explore/"] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-explore-grid scope=explore-search -- the image grid below the search input */
+main a[href^="/p/"],
+main a[href^="/reel/"],
+main a[href^="/tv/"] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */
+main > :not(:first-child),
+article,
+section:has(a[href^="/explore/people/"]),
+div:has(> a[href^="/explore/people/"]) {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-post-related scope=post-page -- More posts from, Suggested and related sections on permalinks */
+main > :not(:first-child),
+section:has(a[href^="/explore/people/"]) {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-app-banners -- Open app and Use the app banners */
+:is(div, aside, section, header):has(> a[href^="instagram://"]),
+:is(div, aside, section, header):has(> a[href^="https://apps.apple.com"]),
+:is(div, aside, section, header):has(> a[href^="https://play.google.com"]),
+a[href^="instagram://"] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-counts scope=counts -- like, view and follower counts, only when the hideCounts setting is on */
+a[href$="/liked-by/"],
+a[href$="/followers/"],
+a[href$="/following/"] {
+  visibility: hidden !important;
+}
+`;
+
+  // src/inject/cssRules.ts
+  var RULE_MARKER = /\/\*\s*@unfeed-rule\s+([A-Za-z0-9_-]+)\s+([^*]*)\*\//g;
+  function splitSelectorList(selectorText) {
+    const selectors = [];
+    let depth = 0;
+    let current = "";
+    for (const char of selectorText) {
+      if (char === "(") depth += 1;
+      else if (char === ")") depth -= 1;
+      if (char === "," && depth === 0) {
+        selectors.push(current.trim());
+        current = "";
+        continue;
+      }
+      current += char;
+    }
+    if (current.trim()) selectors.push(current.trim());
+    return selectors.filter(Boolean);
+  }
+  function splitBlocks(css) {
+    const blocks = [];
+    let index = 0;
+    while (index < css.length) {
+      const open = css.indexOf("{", index);
+      if (open === -1) break;
+      const close = css.indexOf("}", open);
+      if (close === -1) break;
+      const selectorText = css.slice(index, open).trim();
+      const body = css.slice(open + 1, close).trim();
+      if (selectorText) {
+        blocks.push({ selectors: splitSelectorList(selectorText), body });
+      }
+      index = close + 1;
+    }
+    return blocks;
+  }
+  function parseNamedCss(css) {
+    var _a, _b;
+    const rules2 = [];
+    const markers = [...css.matchAll(RULE_MARKER)];
+    for (let i = 0; i < markers.length; i += 1) {
+      const marker = markers[i];
+      const meta = marker[2].trim();
+      const dash = meta.indexOf("--");
+      const optionText = dash === -1 ? meta : meta.slice(0, dash).trim();
+      const title = dash === -1 ? meta : meta.slice(dash + 2).trim();
+      let scopes = [];
+      const scopeMatch = /(?:^|\s)scope=([\w,-]+)/.exec(optionText);
+      if (scopeMatch) {
+        scopes = scopeMatch[1].split(",").map((token) => token.trim()).filter(Boolean);
+      }
+      const bodyStart = ((_a = marker.index) != null ? _a : 0) + marker[0].length;
+      const bodyEnd = i + 1 < markers.length ? (_b = markers[i + 1].index) != null ? _b : css.length : css.length;
+      rules2.push({ id: marker[1], title, scopes, blocks: splitBlocks(css.slice(bodyStart, bodyEnd)) });
+    }
+    return rules2;
+  }
+  function ruleCss(rule) {
+    return rule.blocks.map((block) => `${block.selectors.join(", ")} { ${block.body} }`).join("\n");
+  }
+  function ruleSelectors(rule) {
+    return rule.blocks.flatMap((block) => block.selectors);
+  }
+
+  // src/rules/instagram.json
+  var instagram_default2 = {
+    site: "instagram",
+    hosts: ["instagram.com", "www.instagram.com", "m.instagram.com"],
+    allowedHostSuffixes: ["cdninstagram.com", "fbcdn.net"],
+    allowedHostPaths: [
+      { host: "facebook.com", path: "/login" },
+      { host: "accountscenter.instagram.com", path: "/" }
+    ],
+    rules: [
+      {
+        id: "ig-1-auth",
+        match: { kind: "prefix", paths: ["/accounts/", "/challenge/", "/consent/", "/privacy/", "/legal/"] },
+        action: "allow"
+      },
+      { id: "ig-2-direct", match: { kind: "prefix", paths: ["/direct/"] }, action: "allow" },
+      { id: "ig-3-stories", match: { kind: "prefix", paths: ["/stories/"] }, action: "allow" },
+      { id: "ig-4-home-stories", match: { kind: "home", context: "stories" }, action: "allow" },
+      { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
+      { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
+      { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },
+      { id: "ig-8-reels", match: { kind: "prefix", paths: ["/reels/"] }, action: "redirect", to: "/direct/inbox/" },
+      {
+        id: "ig-9-shared-post",
+        match: { kind: "singleSegmentPrefix", prefixes: ["/reel/", "/p/", "/tv/"] },
+        action: "allowIfSharedPosts",
+        to: "/direct/inbox/"
+      },
+      { id: "ig-10-profile", match: { kind: "username" }, action: "allow" },
+      { id: "ig-11-fallback", match: { kind: "any" }, action: "allow" }
+    ]
+  };
+
+  // src/rules/linkedin.json
+  var linkedin_default = {
+    site: "linkedin",
+    hosts: ["linkedin.com", "www.linkedin.com"],
+    allowedHostSuffixes: ["licdn.com"],
+    allowedHostPaths: [],
+    alwaysAllowHosts: ["lnkd.in"],
+    rules: [
+      {
+        id: "li-1-auth",
+        match: { kind: "prefix", paths: ["/login", "/checkpoint/", "/uas/", "/authwall", "/signup", "/psettings/", "/mypreferences/"] },
+        action: "allow"
+      },
+      { id: "li-2-messaging", match: { kind: "prefix", paths: ["/messaging/"] }, action: "allow" },
+      { id: "li-3-entities", match: { kind: "prefix", paths: ["/in/", "/company/", "/school/"] }, action: "allow" },
+      {
+        id: "li-4-search-people",
+        match: { kind: "prefix", paths: ["/search/results/people/", "/search/results/companies/", "/search/results/all/"] },
+        action: "allow"
+      },
+      {
+        id: "li-5-search-content",
+        match: { kind: "prefix", paths: ["/search/results/content/"] },
+        action: "redirect",
+        to: "/search/results/people/",
+        keepQuery: ["keywords"]
+      },
+      { id: "li-6-invitation-manager", match: { kind: "prefix", paths: ["/mynetwork/invitation-manager/"] }, action: "allow" },
+      { id: "li-7-mynetwork", match: { kind: "prefix", paths: ["/mynetwork/"] }, action: "redirect", to: "/mynetwork/invitation-manager/" },
+      {
+        id: "li-8-shared-post",
+        match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
+        action: "allowIfSharedPosts",
+        to: "/messaging/"
+      },
+      { id: "li-9-feed", match: { kind: "prefix", paths: ["/feed/"] }, action: "redirect", to: "/messaging/" },
+      { id: "li-9-home", match: { kind: "home" }, action: "redirect", to: "/messaging/" },
+      {
+        id: "li-10-distractions",
+        match: { kind: "prefix", paths: ["/notifications/", "/news/", "/video/", "/learning/", "/games/"] },
+        action: "redirect",
+        to: "/messaging/"
+      },
+      { id: "li-10-events-root", match: { kind: "exact", paths: ["/events/"] }, action: "redirect", to: "/messaging/" },
+      { id: "li-11-jobs", match: { kind: "prefix", paths: ["/jobs/"] }, action: "allow" },
+      { id: "li-12-fallback", match: { kind: "any" }, action: "allow" }
+    ]
+  };
+
+  // src/rules/decide.ts
+  var MATCH_KINDS = ["prefix", "home", "singleSegmentPrefix", "username", "exact", "any"];
+  var RULE_ACTIONS = ["allow", "redirect", "allowIfSharedPosts"];
+  function fail(site, problem) {
+    throw new Error(`Invalid rules for ${site}: ${problem}`);
+  }
+  function isStringArray(value) {
+    return Array.isArray(value) && value.every((item) => typeof item === "string");
+  }
+  function normalizePath(pathname) {
+    let path = pathname.toLowerCase().replace(/\/{2,}/g, "/");
+    const query = path.indexOf("?");
+    if (query !== -1) path = path.slice(0, query);
+    const hash = path.indexOf("#");
+    if (hash !== -1) path = path.slice(0, hash);
+    if (!path.startsWith("/")) path = `/${path}`;
+    if (!path.endsWith("/")) path = `${path}/`;
+    return path;
+  }
+  function hostMatches(host, pattern) {
+    return host === pattern || host.endsWith(`.${pattern}`);
+  }
+  function ruleMatches(rule, path, context) {
+    var _a, _b, _c;
+    switch (rule.match.kind) {
+      case "prefix":
+        return ((_a = rule.match.paths) != null ? _a : []).some((prefix) => path.startsWith(prefix));
+      case "home":
+        return path === "/" && (rule.match.context === void 0 || context === rule.match.context);
+      case "singleSegmentPrefix":
+        return ((_b = rule.match.prefixes) != null ? _b : []).some((prefix) => {
+          if (!path.startsWith(prefix)) return false;
+          const rest = path.slice(prefix.length);
+          return rest.length > 0 && !rest.slice(0, -1).includes("/");
+        });
+      case "username":
+        return path !== "/";
+      case "exact":
+        return ((_c = rule.match.paths) != null ? _c : []).some((candidate) => path === normalizePath(candidate));
+      case "any":
+        return true;
+    }
+  }
+  function parseSiteRules(raw, site) {
+    if (typeof raw !== "object" || raw === null) fail(site, "file must be an object");
+    const file = raw;
+    if (file.site !== site) fail(site, `file declares site "${String(file.site)}"`);
+    if (!isStringArray(file.hosts) || file.hosts.length === 0) {
+      fail(site, "hosts must be a non-empty list of strings");
+    }
+    const allowedHostSuffixes = file.allowedHostSuffixes === void 0 ? [] : file.allowedHostSuffixes;
+    if (!isStringArray(allowedHostSuffixes)) fail(site, "allowedHostSuffixes must be a list of strings");
+    const allowedHostPaths = [];
+    if (file.allowedHostPaths !== void 0) {
+      if (!Array.isArray(file.allowedHostPaths)) fail(site, "allowedHostPaths must be a list");
+      for (const entry of file.allowedHostPaths) {
+        if (typeof entry !== "object" || entry === null) fail(site, "allowedHostPaths entries must be objects");
+        const record = entry;
+        if (typeof record.host !== "string" || typeof record.path !== "string") {
+          fail(site, "allowedHostPaths entries need host and path strings");
+        }
+        allowedHostPaths.push({ host: record.host.toLowerCase(), path: normalizePath(record.path) });
+      }
+    }
+    const alwaysAllowHosts = file.alwaysAllowHosts === void 0 ? [] : file.alwaysAllowHosts;
+    if (!isStringArray(alwaysAllowHosts)) fail(site, "alwaysAllowHosts must be a list of strings");
+    if (!Array.isArray(file.rules) || file.rules.length === 0) fail(site, "rules must be a non-empty list");
+    const rules2 = file.rules.map((entry, index) => {
+      if (typeof entry !== "object" || entry === null) fail(site, `rule ${index} must be an object`);
+      const record = entry;
+      if (typeof record.id !== "string") fail(site, `rule ${index} needs an id string`);
+      const id = record.id;
+      if (typeof record.match !== "object" || record.match === null) fail(site, `rule ${id} needs a match object`);
+      const match = record.match;
+      if (typeof match.kind !== "string" || !MATCH_KINDS.includes(match.kind)) {
+        fail(site, `rule ${id} has unknown match kind "${String(match.kind)}"`);
+      }
+      if (match.paths !== void 0 && !isStringArray(match.paths)) fail(site, `rule ${id} paths must be strings`);
+      if (match.prefixes !== void 0 && !isStringArray(match.prefixes)) fail(site, `rule ${id} prefixes must be strings`);
+      if (match.context !== void 0 && typeof match.context !== "string") {
+        fail(site, `rule ${id} context must be a string`);
+      }
+      if (typeof record.action !== "string" || !RULE_ACTIONS.includes(record.action)) {
+        fail(site, `rule ${id} has unknown action "${String(record.action)}"`);
+      }
+      const action = record.action;
+      let to;
+      if (action === "redirect" || action === "allowIfSharedPosts") {
+        if (typeof record.to !== "string" || !record.to.startsWith("/")) {
+          fail(site, `rule ${id} action ${action} needs a to path starting with /`);
+        }
+        to = record.to;
+      }
+      let keepQuery;
+      if (record.keepQuery !== void 0) {
+        if (!isStringArray(record.keepQuery)) fail(site, `rule ${id} keepQuery must be strings`);
+        keepQuery = record.keepQuery;
+      }
+      return {
+        id,
+        match: { kind: match.kind, paths: match.paths, prefixes: match.prefixes, context: match.context },
+        action,
+        to,
+        keepQuery
+      };
+    });
+    if (!rules2.some((rule) => rule.match.kind === "any")) fail(site, "rules must include an any fallback");
+    return {
+      site,
+      hosts: file.hosts.map((host) => host.toLowerCase()),
+      allowedHostSuffixes: allowedHostSuffixes.map((suffix) => suffix.toLowerCase()),
+      allowedHostPaths,
+      alwaysAllowHosts: alwaysAllowHosts.map((host) => host.toLowerCase()),
+      rules: rules2
+    };
+  }
+  function redirectWithQuery(rule, url) {
+    var _a;
+    const to = (_a = rule.to) != null ? _a : "/";
+    if (!rule.keepQuery || rule.keepQuery.length === 0) {
+      return { action: "redirect", to, rule: rule.id };
+    }
+    const params = new URLSearchParams();
+    for (const key of rule.keepQuery) {
+      for (const value of url.searchParams.getAll(key)) params.append(key, value);
+    }
+    const query = params.toString();
+    return { action: "redirect", to: query ? `${to}?${query}` : to, rule: rule.id };
+  }
+  var RULES = {
+    instagram: parseSiteRules(instagram_default2, "instagram"),
+    linkedin: parseSiteRules(linkedin_default, "linkedin")
+  };
+  function decide(site, rawUrl, context, settings) {
+    const rules2 = RULES[site];
+    let url;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      return { action: "external", rule: "unparseable-url" };
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return { action: "allow", rule: "non-http-scheme" };
+    }
+    const host = url.hostname.toLowerCase();
+    const path = normalizePath(url.pathname);
+    if (!rules2.hosts.includes(host)) {
+      if (rules2.allowedHostSuffixes.some((suffix) => hostMatches(host, suffix))) {
+        return { action: "allow", rule: "asset-host" };
+      }
+      if (rules2.alwaysAllowHosts.some((entry) => hostMatches(host, entry))) {
+        return { action: "allow", rule: "short-link-host" };
+      }
+      for (const entry of rules2.allowedHostPaths) {
+        if (hostMatches(host, entry.host) && path.startsWith(entry.path)) {
+          return { action: "allow", rule: "host-path" };
+        }
+      }
+      return { action: "external", rule: "outside-host" };
+    }
+    for (const rule of rules2.rules) {
+      if (!ruleMatches(rule, path, context)) continue;
+      if (rule.action === "allow") return { action: "allow", rule: rule.id };
+      if (rule.action === "redirect") return redirectWithQuery(rule, url);
+      return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url);
+    }
+    return { action: "allow", rule: "unmatched-fallback" };
+  }
+
+  // src/inject/protocol.ts
+  var DEFAULT_INJECT_SETTINGS = {
+    allowSharedPosts: true,
+    hideCounts: false
+  };
+
+  // src/inject/unread.ts
+  function parseUnreadFromTitle(title) {
+    const match = /^\s*\((\d{1,3})\)(?:\s|$)/.exec(title);
+    if (!match) return 0;
+    const count = Number.parseInt(match[1], 10);
+    return Number.isFinite(count) ? count : 0;
+  }
+
+  // src/inject/common.ts
+  var INJECT_VERSION = "t3.1";
+  function createPoster(site) {
+    return (message) => {
+      try {
+        const bridge = globalThis.ReactNativeWebView;
+        if (bridge && typeof bridge.postMessage === "function") {
+          bridge.postMessage(JSON.stringify(message));
+        }
+      } catch (error) {
+        console.warn("[unfeed] postMessage failed", site, error);
+      }
+    };
+  }
+  function currentHref(win) {
+    var _a;
+    try {
+      return typeof ((_a = win.location) == null ? void 0 : _a.href) === "string" ? win.location.href : "";
+    } catch {
+      return "";
+    }
+  }
+  function readInjectSettings() {
+    const raw = globalThis.__UNFEED_SETTINGS__;
+    const merged = { ...DEFAULT_INJECT_SETTINGS };
+    if (typeof raw === "object" && raw !== null) {
+      const record = raw;
+      if (typeof record.allowSharedPosts === "boolean") merged.allowSharedPosts = record.allowSharedPosts;
+      if (typeof record.hideCounts === "boolean") merged.hideCounts = record.hideCounts;
+    }
+    return merged;
+  }
+  function installStyle(id, css) {
+    const existing = document.getElementById(id);
+    if (existing instanceof HTMLStyleElement) {
+      if (existing.textContent !== css) existing.textContent = css;
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = css;
+    document.documentElement.appendChild(style);
+  }
+  function rafThrottle(fn) {
+    let queued = false;
+    return () => {
+      if (queued) return;
+      queued = true;
+      const run = () => {
+        queued = false;
+        try {
+          fn();
+        } catch (error) {
+          console.warn("[unfeed] hide pass failed", error);
+        }
+      };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+      else setTimeout(run, 16);
+    };
+  }
+  function createApplyPass(site, settings, config, post) {
+    return () => {
+      var _a;
+      try {
+        if (!document.documentElement) return;
+        if (config.css) installStyle(`unfeed-css-${site}`, config.css);
+        for (const sweep of (_a = config.sweeps) != null ? _a : []) {
+          try {
+            sweep(settings, post);
+          } catch (error) {
+            console.warn("[unfeed] sweep failed", site, error);
+          }
+        }
+      } catch (error) {
+        console.warn("[unfeed] apply pass failed", site, error);
+      }
+    };
+  }
+  function enforceRoute(site, settings, href) {
+    try {
+      const declared = globalThis.__UNFEED_CONTEXT__;
+      const context = typeof declared === "string" && declared ? declared : "page";
+      const result = decide(site, href, context, settings);
+      if (result.action !== "redirect" || !result.to) return;
+      const target = new URL(result.to, location.origin).href;
+      if (target !== location.href) window.location.replace(target);
+    } catch (error) {
+      console.warn("[unfeed] in-page enforce failed", site, error);
+    }
+  }
+  function installRouteHooks(win, onRoute) {
+    var _a;
+    const history = (_a = win.history) != null ? _a : {};
+    const wrap = (name) => {
+      const original = history[name];
+      if (typeof original !== "function") return;
+      history[name] = function(...args) {
+        const result = original.apply(this, args);
+        onRoute(currentHref(win));
+        return result;
+      };
+    };
+    wrap("pushState");
+    wrap("replaceState");
+    if (typeof win.addEventListener === "function") {
+      win.addEventListener("popstate", () => onRoute(currentHref(win)));
+    }
+    onRoute(currentHref(win));
+  }
+  function watchDom(apply) {
+    const throttled = rafThrottle(apply);
+    if (typeof MutationObserver !== "undefined") {
+      const observer = new MutationObserver(throttled);
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+    }
+    window.setInterval(throttled, 2e3);
+  }
+  function watchUnread(post) {
+    let last = null;
+    const check = () => {
+      var _a;
+      const title = (_a = document.title) != null ? _a : "";
+      if (!title.trim()) return;
+      const count = parseUnreadFromTitle(title);
+      if (count !== last) {
+        last = count;
+        post({ type: "unread", count });
+      }
+    };
+    check();
+    window.setInterval(check, 1500);
+  }
+  function whenDocumentReady(run) {
+    if (document.documentElement) {
+      run();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (!document.documentElement) return;
+      observer.disconnect();
+      run();
+    });
+    observer.observe(document, { childList: true });
+  }
+  function setupInject(site, config = {}) {
+    const post = createPoster(site);
+    try {
+      const scope = globalThis;
+      scope.__UNFEED__ = { site, version: INJECT_VERSION, decide };
+      const win = scope.window;
+      if (!win || typeof document === "undefined") return;
+      const settings = readInjectSettings();
+      const apply = createApplyPass(site, settings, config, post);
+      whenDocumentReady(() => {
+        apply();
+        watchDom(apply);
+      });
+      const onRoute = (url) => {
+        if (!url) return;
+        post({ type: "route", url });
+        if (config.enforce) enforceRoute(site, settings, url);
+        apply();
+      };
+      installRouteHooks(win, onRoute);
+      if (config.unread) watchUnread(post);
+    } catch (error) {
+      post({ type: "inject-error", message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  // src/inject/scopes.ts
+  function isSingleSegment(path, prefixes) {
+    return prefixes.some((prefix) => {
+      if (!path.startsWith(prefix)) return false;
+      const rest = path.slice(prefix.length);
+      return rest.length > 0 && !rest.slice(0, -1).includes("/");
+    });
+  }
+  function pageScopes(pathname) {
+    const path = normalizePath(pathname);
+    if (path === "/") return ["home"];
+    if (path.startsWith("/explore/search/")) return ["explore-search"];
+    if (isSingleSegment(path, ["/p/", "/reel/", "/tv/"])) return ["post-page"];
+    return [];
+  }
+
+  // src/inject/instagram.ts
+  var rules = parseNamedCss(instagram_default);
+  function activeScopes(settings) {
+    const scopes = new Set(pageScopes(location.pathname));
+    if (settings.hideCounts) scopes.add("counts");
+    return scopes;
+  }
+  function countMatches(selectors) {
+    let total = 0;
+    for (const selector of selectors) {
+      try {
+        total += document.querySelectorAll(selector).length;
+      } catch {
+      }
+    }
+    return total;
+  }
+  var applyNamedRules = (settings, post) => {
+    const live = activeScopes(settings);
+    const matched = {};
+    for (const rule of rules) {
+      const applies = rule.scopes.every((scope) => live.has(scope));
+      const element = `unfeed-rule-ig-${rule.id}`;
+      if (!applies) {
+        installStyle(element, "");
+        matched[rule.id] = 0;
+        continue;
+      }
+      installStyle(element, ruleCss(rule));
+      matched[rule.id] = countMatches(ruleSelectors(rule));
+    }
+    post({ type: "hide-stats", matched });
+  };
+  var detectUsername = (_settings, post) => {
+    var _a, _b;
+    const scope = globalThis;
+    const state = scope.__UNFEED_IG__ = (_a = scope.__UNFEED_IG__) != null ? _a : {};
+    if (state.postedUsername) return;
+    for (const anchor of document.querySelectorAll("a[href]")) {
+      if (!(anchor instanceof HTMLAnchorElement)) continue;
+      let path = "";
+      try {
+        path = new URL((_b = anchor.getAttribute("href")) != null ? _b : "", location.origin).pathname;
+      } catch {
+        continue;
+      }
+      if (!/^\/[A-Za-z0-9._]+\/?$/.test(path)) continue;
+      if (path.startsWith("/explore") || path.startsWith("/reels")) continue;
+      if (!anchor.querySelector("img")) continue;
+      const value = path.replace(/\//g, "");
+      state.postedUsername = value;
+      post({ type: "ig-username", value });
+      return;
+    }
+  };
+  setupInject("instagram", {
+    sweeps: [applyNamedRules, detectUsername],
+    unread: true,
+    enforce: true
+  });
+})();
