@@ -1,7 +1,7 @@
 // QR screen (charter section 8.7): two segments, Scan and My code, with the
 // scan result in a bottom sheet. The ?scan= and ?profile= router params
 // prefill the sheet and My code for the web preview screenshots and double as
-// a deep link seam (assumption 21 in ASSUMPTIONS.md).
+// a deep link seam (assumption 19 in ASSUMPTIONS.md).
 
 import { useCallback, useState } from 'react';
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -52,7 +52,7 @@ export function QrScreen({
   const previewProfile = firstParam(params.profile);
   // The sheet payload is initialized from the ?scan= param at mount; deep
   // links and web loads always arrive as a fresh mount, so no effect is
-  // needed (assumption 21 in ASSUMPTIONS.md).
+  // needed (assumption 19 in ASSUMPTIONS.md).
   const [result, setResult] = useState<ScanPayload | null>(() =>
     previewScan ? classifyCode(previewScan) : null,
   );
