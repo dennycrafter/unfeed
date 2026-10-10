@@ -12,8 +12,9 @@ export const INJECT_VERSION = 't3.1';
 type PostMessage = (message: PageMessage) => void;
 
 /** A site specific hide pass. Runs on setup, on every route change and on
- * every DOM mutation, always against the current inject settings. */
-export type HideSweep = (settings: InjectSettings) => void;
+ * every DOM mutation, always against the current inject settings. The poster
+ * lets a sweep report findings (hide statistics, a detected username). */
+export type HideSweep = (settings: InjectSettings, post: PostMessage) => void;
 
 /** Site specific parts the entry file switches on (charter sections 8.4
  * and 8.5). Everything is optional so the T1 entries keep working. */
@@ -39,7 +40,7 @@ interface MiniWindow {
   location?: { href?: string };
 }
 
-function createPoster(site: Site): PostMessage {
+export function createPoster(site: Site): PostMessage {
   return (message) => {
     try {
       const bridge = (globalThis as { ReactNativeWebView?: { postMessage?: (data: string) => void } })
@@ -76,7 +77,7 @@ export function readInjectSettings(): InjectSettings {
 }
 
 /** Installs or refreshes one named style block; safe to call on every pass. */
-function installStyle(id: string, css: string): void {
+export function installStyle(id: string, css: string): void {
   const existing = document.getElementById(id);
   if (existing instanceof HTMLStyleElement) {
     if (existing.textContent !== css) existing.textContent = css;
@@ -108,7 +109,7 @@ function rafThrottle(fn: () => void): () => void {
   };
 }
 
-function createApplyPass(site: Site, settings: InjectSettings, config: InjectConfig): () => void {
+function createApplyPass(site: Site, settings: InjectSettings, config: InjectConfig, post: PostMessage): () => void {
   return () => {
     try {
       // Document start scripts can run before the html element exists; the
@@ -118,7 +119,7 @@ function createApplyPass(site: Site, settings: InjectSettings, config: InjectCon
       // Each sweep is isolated: one broken selector must not stop the rest.
       for (const sweep of config.sweeps ?? []) {
         try {
-          sweep(settings);
+          sweep(settings, post);
         } catch (error) {
           console.warn('[unfeed] sweep failed', site, error);
         }
@@ -131,12 +132,16 @@ function createApplyPass(site: Site, settings: InjectSettings, config: InjectCon
 
 /** The in-page second line of defence (charter section 4): the same decide()
  * the native side runs, resolving redirects against the current origin. The
- * page does not know the native tab, so it uses a neutral context; the
- * LinkedIn table has no context dependent rows (Instagram ships its own
- * enforcement with T2). */
+ * page reads the tab context the native side declared in the preamble, so
+ * context dependent rows (Instagram's home rule) behave as native intends. */
 function enforceRoute(site: Site, settings: InjectSettings, href: string): void {
   try {
-    const result = decide(site, href, 'page', settings);
+    // The native side declares the tab that caused this load through the
+    // preamble (Instagram's home rule is context dependent); pages without
+    // it keep the neutral context.
+    const declared = (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__;
+    const context = typeof declared === 'string' && declared ? declared : 'page';
+    const result = decide(site, href, context, settings);
     if (result.action !== 'redirect' || !result.to) return;
     const target = new URL(result.to, location.origin).href;
     if (target !== location.href) window.location.replace(target);
@@ -225,7 +230,7 @@ export function setupInject(site: Site, config: InjectConfig = {}): void {
     if (!win || typeof document === 'undefined') return;
 
     const settings = readInjectSettings();
-    const apply = createApplyPass(site, settings, config);
+    const apply = createApplyPass(site, settings, config, post);
     // Hides and DOM watching need the html element; routes do not.
     whenDocumentReady(() => {
       apply();

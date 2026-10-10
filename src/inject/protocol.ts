@@ -5,7 +5,9 @@
 export type PageMessage =
   | { type: 'route'; url: string }
   | { type: 'unread'; count: number }
-  | { type: 'inject-error'; message: string };
+  | { type: 'inject-error'; message: string }
+  | { type: 'ig-username'; value: string }
+  | { type: 'hide-stats'; matched: Record<string, number> };
 
 export function isPageMessage(value: unknown): value is PageMessage {
   if (typeof value !== 'object' || value === null) return false;
@@ -13,6 +15,14 @@ export function isPageMessage(value: unknown): value is PageMessage {
   if (record.type === 'route') return typeof record.url === 'string';
   if (record.type === 'unread') return typeof record.count === 'number' && Number.isFinite(record.count);
   if (record.type === 'inject-error') return typeof record.message === 'string';
+  if (record.type === 'ig-username') return typeof record.value === 'string' && record.value.length > 0;
+  if (record.type === 'hide-stats') {
+    return (
+      typeof record.matched === 'object' &&
+      record.matched !== null &&
+      Object.values(record.matched).every((count) => typeof count === 'number')
+    );
+  }
   return false;
 }
 
