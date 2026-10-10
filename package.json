@@ -59,6 +59,11 @@
   },
   "private": true,
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "tests/screens/",
+      "tests/inject/"
+    ]
   }
 }
