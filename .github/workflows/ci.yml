@@ -22,6 +22,9 @@ jobs:
       - name: Build injected scripts
         run: npm run build:inject
 
+      - name: Generated inject bundle is committed
+        run: git diff --exit-code -- src/inject/generated
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -39,9 +42,6 @@ jobs:
 
       - name: Expo doctor
         run: npx expo-doctor
-
-      - name: Web export
-        run: npm run web
 
       - name: Upload web export
         uses: actions/upload-artifact@v4

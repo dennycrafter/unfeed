@@ -9,3 +9,8 @@ One line per decision made where the master document did not decide for us.
 5. The scaffold commit goes straight to local main, matching the master document T0 and gotcha 12, because a PR needs a main to merge into. The PR flow starts with the next ticket once the repo is connected.
 6. The Expo template ships demo screens and components under src/app and src/components. They are kept so T0 proves the build; later tickets replace them with the real Unfeed shell.
 7. app.json small touches: display name "Unfeed", dark user interface style, and dark splash and Android icon backgrounds (#0b0b0d) to match the dark UI rules in section 10. Real icon and splash art is stretch S11.
+8. The task brief pointed at "charter section 5" for the route rules table, but section 5 is environment variables; the Instagram route table lives in section 8.3. The charter wins, so section 8.3 is the source of truth for decide() and the tests.
+9. react-native-webview 13 does not re-export its types from the package root, so type only imports come from react-native-webview/lib/WebViewTypes (ShouldStartLoadRequest, WebViewNavigation, WebViewMessageEvent, WebViewProgressEvent).
+10. The parity test runs the generated bundle in a node vm sandbox given URL and console, which are the standard globals the script finds in any real page. A bare sandbox has no URL and every parse would fail there for the wrong reason.
+11. CI gained a step that runs build:inject then checks git diff on src/inject/generated, so a stale committed bundle fails CI and the app and the later userscripts cannot drift.
+
