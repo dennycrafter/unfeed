@@ -6,13 +6,13 @@ import { forwardRef } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PageMessage } from '../inject/protocol';
 import { INSTAGRAM_INJECT_SCRIPT } from '../inject/generated/instagram.generated';
-import type { HostSettings, WebViewHostHandle } from './types';
+import type { HostSettings, WebViewHostApi } from './types';
 import { WebViewHost } from './WebViewHost';
 
 export const INSTAGRAM_HOME_URL = 'https://www.instagram.com/direct/inbox/';
 export const INSTAGRAM_ROOT_URL = 'https://www.instagram.com/';
 
-export type { WebViewHostHandle as InstagramHostHandle };
+export type { WebViewHostApi as InstagramHostHandle };
 
 interface InstagramHostProps {
   /** Full URL to show right now; the shell owns the tab to URL mapping. */
@@ -26,7 +26,7 @@ interface InstagramHostProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export const InstagramHost = forwardRef<WebViewHostHandle, InstagramHostProps>(function InstagramHost(
+export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(function InstagramHost(
   { url, context, settings, onMessage, scrollToTopSignal, style }: InstagramHostProps,
   ref,
 ) {

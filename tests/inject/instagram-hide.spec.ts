@@ -21,8 +21,15 @@ const FIXTURE_ROUTES: Record<string, string> = {
 type PageMessageRecord = Record<string, unknown>;
 
 /** Serves the fixtures under their real instagram.com paths and installs the
- * postMessage bridge stub plus the generated script before content loads. */
-async function openFixture(page: Page, path: string): Promise<void> {
+ * postMessage bridge stub plus the generated script before content loads.
+ * The native side declares the tab context and settings through the preamble
+ * (src/inject/common.ts), so tests that load pages with a context dependent
+ * rule, like the stories tray on `/`, declare them the same way. */
+async function openFixture(
+  page: Page,
+  path: string,
+  native: { context?: string; settings?: Record<string, unknown> } = {},
+): Promise<void> {
   await page.addInitScript(() => {
     const store: PageMessageRecord[] = [];
     (window as unknown as { __unfeedMessages?: PageMessageRecord[] }).__unfeedMessages = store;
@@ -31,6 +38,16 @@ async function openFixture(page: Page, path: string): Promise<void> {
       configurable: true,
     });
   });
+  if (native.context || native.settings) {
+    await page.addInitScript((state) => {
+      if (state.context) {
+        (window as unknown as { __UNFEED_CONTEXT__?: string }).__UNFEED_CONTEXT__ = state.context;
+      }
+      if (state.settings) {
+        (window as unknown as { __UNFEED_SETTINGS__?: Record<string, unknown> }).__UNFEED_SETTINGS__ = state.settings;
+      }
+    }, native);
+  }
   await page.addInitScript(INSTAGRAM_INJECT_SCRIPT);
   await page.route('https://www.instagram.com/**', (route) => {
     const { pathname } = new URL(route.request().url());
@@ -59,7 +76,9 @@ async function messages(page: Page): Promise<PageMessageRecord[]> {
 }
 
 test('home fixture: feed hidden, stories tray visible, own nav hidden', async ({ page }) => {
-  await openFixture(page, '/');
+  // The home page only loads in stories context (charter section 8.6), so the
+  // guard sees a stories visit and lets it through.
+  await openFixture(page, '/', { context: 'stories' });
   await waitForMessage(page, { type: 'route', url: 'https://www.instagram.com/' });
   await expect(page.locator('[aria-label="Stories tray"]')).toBeVisible();
   await expect(page.locator('article', { hasText: 'Feed post one' })).toBeHidden();
@@ -69,7 +88,7 @@ test('home fixture: feed hidden, stories tray visible, own nav hidden', async ({
 });
 
 test('home fixture: unread count and username are reported', async ({ page }) => {
-  await openFixture(page, '/');
+  await openFixture(page, '/', { context: 'stories' });
   await waitForMessage(page, { type: 'unread', count: 3 });
   await waitForMessage(page, { type: 'ig-username', value: 'yourprofile' });
   const types = (await messages(page)).map((message) => message.type);
@@ -109,12 +128,8 @@ test('route message is posted on pushState', async ({ page }) => {
   await waitForMessage(page, { type: 'route', url: 'https://www.instagram.com/explore/search/' });
 });
 
-test('in page guard redirects a reels push once the context is confirmed', async ({ page }) => {
-  await openFixture(page, '/direct/inbox/');
-  await page.evaluate(() => {
-    const api = (window as unknown as { __UNFEED__?: { setNativeState?: (state: unknown) => void } }).__UNFEED__;
-    api?.setNativeState?.({ context: 'dms', settings: { allowSharedPosts: true, hideCounts: false } });
-  });
+test('in page guard redirects a reels push under a declared context', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
   await page.evaluate(() => {
     history.pushState({}, '', '/reels/abc/');
   });
@@ -124,27 +139,17 @@ test('in page guard redirects a reels push once the context is confirmed', async
 });
 
 test('hideCounts setting hides follower and like counts on request', async ({ page }) => {
-  await openFixture(page, '/p/abc123/');
+  // Settings are read once at document-start from the preamble, so each
+  // variant is a fresh load, matching how the native app reloads on change.
   const countsLink = page.locator('a[href="/yourprofile/followers/"]');
-  await expect(countsLink).toBeVisible();
-  await page.evaluate(() => {
-    const api = (window as unknown as { __UNFEED__?: { setNativeState?: (state: unknown) => void } }).__UNFEED__;
-    api?.setNativeState?.({ settings: { allowSharedPosts: true, hideCounts: true } });
-  });
+  await openFixture(page, '/p/abc123/', { settings: { allowSharedPosts: true, hideCounts: true } });
   await expect(countsLink).toBeHidden();
-  await page.evaluate(() => {
-    const api = (window as unknown as { __UNFEED__?: { setNativeState?: (state: unknown) => void } }).__UNFEED__;
-    api?.setNativeState?.({ settings: { allowSharedPosts: true, hideCounts: false } });
-  });
+  await openFixture(page, '/p/abc123/', { settings: { allowSharedPosts: true, hideCounts: false } });
   await expect(countsLink).toBeVisible();
 });
 
 test('per rule match counts are exposed for the debug screen', async ({ page }) => {
-  await openFixture(page, '/');
-  await page.evaluate(() => {
-    const api = (window as unknown as { __UNFEED__?: { setNativeState?: (state: unknown) => void } }).__UNFEED__;
-    api?.setNativeState?.({ context: 'dms', settings: { allowSharedPosts: true, hideCounts: false } });
-  });
+  await openFixture(page, '/', { context: 'stories' });
   await waitForMessage(page, { type: 'hide-stats' });
   // Stats posted at document-start see an empty page; wait until the
   // observer tick after the first rendered frame reports real counts.
