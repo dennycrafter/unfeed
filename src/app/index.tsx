@@ -11,7 +11,10 @@ import { router } from 'expo-router';
 import { AppSwitcher, type AppKey } from '@/components/AppSwitcher';
 import { BottomBar, type BottomTab } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
-import { IconAvatar, IconChat, IconGear, IconSearch, IconStories } from '@/components/icons';
+import { IconAvatar, IconChat, IconGear, IconQr, IconSearch, IconStories } from '@/components/icons';
+import { MyCode } from '@/qr/MyCode';
+import { buildInstagramProfileUrl } from '@/qr/instagramUrl';
+
 import { InstagramHost, INSTAGRAM_HOME_URL, INSTAGRAM_LOGOUT_URL, INSTAGRAM_ROOT_URL, type InstagramHostHandle } from '@/hosts/InstagramHost';
 import { LinkedInHost } from '@/hosts/LinkedInHost';
 import type { PageMessage } from '@/inject/protocol';
@@ -19,7 +22,7 @@ import { tickHaptic } from '@/state/haptics';
 import { getStoreState, updateSettings, useStoreState } from '@/state/store';
 import { colors } from '@/theme/tokens';
 
-type InstagramTab = 'search' | 'dms' | 'profile';
+type InstagramTab = 'search' | 'dms' | 'profile' | 'qr';
 
 const DEFAULT_TAB: InstagramTab = 'dms';
 
@@ -28,6 +31,9 @@ const TAB_DEFAULT_URLS: Record<InstagramTab, string> = {
   dms: INSTAGRAM_HOME_URL,
   // Until the username is known, the profile tab opens account settings.
   profile: 'https://www.instagram.com/accounts/edit/',
+  // The QR tab carries no page of its own: the My code panel (S1) covers the
+  // inbox page underneath, the same pattern as the LinkedIn QR tab.
+  qr: INSTAGRAM_HOME_URL,
 };
 
 function initialTabUrls(): Record<InstagramTab, string> {
@@ -52,10 +58,20 @@ function initialUnread(): { instagram: number; linkedin: number } {
   };
 }
 
+function initialPreviewUsername(): string | null {
+  // Web preview only: seeds the Instagram My code panel so the screen tests
+  // can capture it. On a phone the username comes from page detection or the
+  // settings row, the same split as the unread seeding above.
+  if (Platform.OS !== 'web') return null;
+  const value = new URLSearchParams(window.location.search).get('igUsername');
+  return value && value.trim() ? value.trim() : null;
+}
+
 const INSTAGRAM_TABS: BottomTab<InstagramTab>[] = [
   { key: 'search', label: 'Search', icon: (color) => <IconSearch color={color} /> },
   { key: 'dms', label: 'DMs', icon: (color) => <IconChat color={color} /> },
   { key: 'profile', label: 'Profile', icon: (color) => <IconAvatar color={color} /> },
+  { key: 'qr', label: 'QR', icon: (color) => <IconQr color={color} /> },
 ];
 
 function pathOf(url: string): string | null {
@@ -110,7 +126,11 @@ export default function Index() {
   // A scanned Instagram link (T4, charter 8.7) overrides the tab URL until a
   // bottom tab is pressed, like the stories override below.
   const [scannedUrl, setScannedUrl] = useState<string | null>(null);
+  const [previewIgUsername] = useState<string | null>(initialPreviewUsername);
   const hostRef = useRef<InstagramHostHandle | null>(null);
+  // My code empty state (S1): the profile tab page load lets the injected
+  // script detect the username, and the panel comes back when it arrives.
+  const returnToQrRef = useRef(false);
 
   // Stored settings arrive a moment after launch: jump to the app Denis left
   // (charter section 6, lastApp). Hosts render once hydration settles, so the
@@ -168,11 +188,24 @@ export default function Index() {
     setActiveApp('instagram');
   }, []);
 
+  // My code empty state (S1): open the profile tab, whose page load lets the
+  // injected script post the username (section 8.5); the QR panel returns
+  // when it does.
+  const findInstagramProfile = useCallback((): void => {
+    returnToQrRef.current = true;
+    setScannedUrl(null);
+    setActiveTab('profile');
+  }, []);
+
   // The page reported the username (section 8.5): the profile tab opens it
   // and the settings screen shows it (auto-detected, editable, charter 6).
   const handleUsernameDetected = useCallback((value: string): void => {
     const url = `https://www.instagram.com/${value}/`;
     setTabUrls((prev) => (prev.profile === url ? prev : { ...prev, profile: url }));
+    if (returnToQrRef.current) {
+      returnToQrRef.current = false;
+      setActiveTab('qr');
+    }
     if (getStoreState().settings.igUsername !== value) updateSettings({ igUsername: value });
   }, []);
 
@@ -291,11 +324,20 @@ export default function Index() {
           <InstagramHost
             ref={hostRef}
             url={stories ? INSTAGRAM_ROOT_URL : (scannedUrl ?? tabUrls[activeTab])}
-            context={stories ? 'stories' : (scannedUrl ? 'profile' : activeTab)}
+            context={stories ? 'stories' : (scannedUrl ? 'profile' : activeTab === 'qr' ? 'dms' : activeTab)}
             settings={settings}
             onMessage={handleMessage}
             scrollToTopSignal={scrollSignal}
           />
+        ) : null}
+        {activeTab === 'qr' && !stories ? (
+          <View style={styles.qrPanel}>
+            <MyCode
+              profileUrl={buildInstagramProfileUrl(previewIgUsername ?? settings.igUsername)}
+              emptyMessage="No Instagram profile link saved yet."
+              onFindProfile={findInstagramProfile}
+            />
+          </View>
         ) : null}
         <BottomBar tabs={INSTAGRAM_TABS} active={activeTab} onSelect={selectTab} />
       </View>
@@ -321,4 +363,12 @@ const styles = StyleSheet.create({
   hostArea: { flex: 1 },
   hidden: { display: 'none' },
   headerButton: { padding: 8 },
+  qrPanel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.bg,
+  },
 });

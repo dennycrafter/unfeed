@@ -11,13 +11,16 @@ import { colors, radius } from '../theme/tokens';
 interface MyCodeProps {
   profileUrl: string | null;
   onFindProfile: () => void;
+  /** Empty state copy; the LinkedIn wording is the default (S1 passes the
+   * Instagram wording from its own side of the app). */
+  emptyMessage?: string;
 }
 
-export function MyCode({ profileUrl, onFindProfile }: MyCodeProps) {
+export function MyCode({ profileUrl, onFindProfile, emptyMessage = 'No LinkedIn profile link saved yet.' }: MyCodeProps) {
   if (!profileUrl) {
     return (
       <EmptyState
-        message="No LinkedIn profile link saved yet."
+        message={emptyMessage}
         actionLabel="Find my profile"
         onAction={onFindProfile}
       />
