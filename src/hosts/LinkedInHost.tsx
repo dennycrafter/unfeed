@@ -21,6 +21,9 @@ import { WebViewHost } from './WebViewHost';
 
 export const LINKEDIN_MESSENGER_URL = 'https://www.linkedin.com/messaging/';
 export const LINKEDIN_PROFILE_ME_URL = 'https://www.linkedin.com/in/me/';
+/** The mobile web sign out route. Navigating here signs the session out;
+ * Expo Go has no per site cookie API (charter 8.8, see ASSUMPTIONS). */
+export const LINKEDIN_LOGOUT_URL = 'https://www.linkedin.com/m/logout/';
 
 export type LinkedInTab = 'messages' | 'search' | 'qr' | 'profile';
 
@@ -30,6 +33,9 @@ export interface LinkedInHostProps {
   haptics?: boolean;
   /** Saved profile URL from settings; used until a vanity is detected. */
   profileUrl?: string | null;
+  /** Bump to sign the session out: load the logout page, then back to
+   * Messages, where the site shows its login (settings screen request). */
+  logoutSignal?: number;
   /** Fires with the profile URL once the WebView lands on /in/<vanity>/. */
   onProfileVanityDetected?: (profileUrl: string) => void;
   /** Opens a scanned Instagram link in the Instagram app (charter 8.7). */
@@ -59,6 +65,7 @@ export function LinkedInHost({
   hideCounts = false,
   haptics = true,
   profileUrl,
+  logoutSignal = 0,
   onProfileVanityDetected,
   onOpenInstagramUrl,
   onMessage,
@@ -73,6 +80,22 @@ export function LinkedInHost({
   useEffect(() => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
+
+  // Log out (settings screen request): land the Messages tab on the site's
+  // own logout page, then bring the inbox URL back so the login shows. The
+  // signal id is remembered so one request only ever runs once.
+  const lastLogoutRef = useRef(0);
+  useEffect(() => {
+    if (logoutSignal === 0 || logoutSignal === lastLogoutRef.current) return;
+    lastLogoutRef.current = logoutSignal;
+    setActiveTab(DEFAULT_TAB);
+    hostRef.current?.clearCache();
+    setTabUrls((current) => ({ ...current, messages: LINKEDIN_LOGOUT_URL }));
+    const timer = setTimeout(() => {
+      setTabUrls((current) => ({ ...current, messages: LINKEDIN_MESSENGER_URL }));
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [logoutSignal]);
 
   useEffect(() => {
     let cancelled = false;

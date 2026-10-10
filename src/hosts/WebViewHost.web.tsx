@@ -23,6 +23,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
     scrollTop() {},
     goBack() {},
     canGoBack: () => false,
+    clearCache() {},
   });
   useImperativeHandle(ref, () => api.current, []);
 
