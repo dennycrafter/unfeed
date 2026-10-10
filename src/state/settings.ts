@@ -26,7 +26,38 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
 };
 
-const KEY = 'unfeed.settings.v1';
+export const SETTINGS_KEY = 'unfeed.settings.v1';
+const KEY = SETTINGS_KEY;
+
+/** A change to stored settings. version is managed here, never patched. */
+export type SettingsPatch = Partial<Omit<Settings, 'version'>>;
+
+function normalizeOptionalText(value: unknown, fallback: string | null): string | null {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Merges a patch into the current settings field by field, so one screen can
+ * change one row without knowing the rest (charter section 6). Unknown or
+ * wrong typed values keep the previous field; text fields empty out to null. */
+export function applySettingsPatch(previous: Settings, patch: SettingsPatch): Settings {
+  return {
+    version: 1,
+    lastApp: patch.lastApp === 'instagram' || patch.lastApp === 'linkedin' ? patch.lastApp : previous.lastApp,
+    igUsername: normalizeOptionalText(patch.igUsername, previous.igUsername),
+    liProfileUrl: normalizeOptionalText(patch.liProfileUrl, previous.liProfileUrl),
+    allowSharedPosts: typeof patch.allowSharedPosts === 'boolean' ? patch.allowSharedPosts : previous.allowSharedPosts,
+    hideCounts: typeof patch.hideCounts === 'boolean' ? patch.hideCounts : previous.hideCounts,
+    haptics: typeof patch.haptics === 'boolean' ? patch.haptics : previous.haptics,
+  };
+}
+
+/** Restores every setting to its default (the settings screen reset row). */
+export function resetToDefaults(): Settings {
+  return { ...DEFAULT_SETTINGS };
+}
 
 export async function loadSettings(): Promise<Settings> {
   try {

@@ -11,6 +11,9 @@ import { WebViewHost } from './WebViewHost';
 
 export const INSTAGRAM_HOME_URL = 'https://www.instagram.com/direct/inbox/';
 export const INSTAGRAM_ROOT_URL = 'https://www.instagram.com/';
+/** The web sign out route. Visiting it ends the session; Expo Go has no per
+ * site cookie API (charter 8.8, see ASSUMPTIONS). */
+export const INSTAGRAM_LOGOUT_URL = 'https://www.instagram.com/accounts/logout/';
 
 export type { WebViewHostApi as InstagramHostHandle };
 
@@ -44,6 +47,7 @@ export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(func
       url={url}
       context={context}
       settings={settings}
+      hideCounts={settings.hideCounts ?? false}
       injectScript={INSTAGRAM_INJECT_SCRIPT}
       onMessage={onMessage}
       scrollToTopSignal={scrollToTopSignal}

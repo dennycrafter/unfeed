@@ -69,6 +69,9 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
       canGoBack() {
         return canGoBackRef.current;
       },
+      clearCache() {
+        webViewRef.current?.clearCache(true);
+      },
     }),
     [],
   );
@@ -152,6 +155,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
     <View style={[styles.fill, style]}>
       <WebView
         ref={webViewRef}
+        testID={`webview-${site}`}
         source={{ uri: source }}
         style={styles.fill}
         userAgent={IPHONE_USER_AGENT}

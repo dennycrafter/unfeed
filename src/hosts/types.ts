@@ -41,4 +41,7 @@ export interface WebViewHostApi {
   scrollTop(): void;
   goBack(): void;
   canGoBack(): boolean;
+  /** Drops the cached page data, part of the log out flow (charter 8.8).
+   * No web preview effect: there is no real cache there. */
+  clearCache(): void;
 }
