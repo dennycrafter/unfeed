@@ -1,0 +1,9 @@
+{
+  "site": "linkedin",
+  "hosts": ["linkedin.com", "www.linkedin.com", "lnkd.in"],
+  "allowedHostSuffixes": ["licdn.com"],
+  "allowedHostPaths": [],
+  "rules": [
+    { "id": "li-0-placeholder-fallback", "match": { "kind": "any" }, "action": "allow" }
+  ]
+}

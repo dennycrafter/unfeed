@@ -1,0 +1,31 @@
+{
+  "site": "instagram",
+  "hosts": ["instagram.com", "www.instagram.com", "m.instagram.com"],
+  "allowedHostSuffixes": ["cdninstagram.com", "fbcdn.net"],
+  "allowedHostPaths": [
+    { "host": "facebook.com", "path": "/login" },
+    { "host": "accountscenter.instagram.com", "path": "/" }
+  ],
+  "rules": [
+    {
+      "id": "ig-1-auth",
+      "match": { "kind": "prefix", "paths": ["/accounts/", "/challenge/", "/consent/", "/privacy/", "/legal/"] },
+      "action": "allow"
+    },
+    { "id": "ig-2-direct", "match": { "kind": "prefix", "paths": ["/direct/"] }, "action": "allow" },
+    { "id": "ig-3-stories", "match": { "kind": "prefix", "paths": ["/stories/"] }, "action": "allow" },
+    { "id": "ig-4-home-stories", "match": { "kind": "home", "context": "stories" }, "action": "allow" },
+    { "id": "ig-5-home", "match": { "kind": "home" }, "action": "redirect", "to": "/direct/inbox/" },
+    { "id": "ig-6-explore-search", "match": { "kind": "prefix", "paths": ["/explore/search/"] }, "action": "allow" },
+    { "id": "ig-7-explore", "match": { "kind": "prefix", "paths": ["/explore/"] }, "action": "redirect", "to": "/explore/search/" },
+    { "id": "ig-8-reels", "match": { "kind": "prefix", "paths": ["/reels/"] }, "action": "redirect", "to": "/direct/inbox/" },
+    {
+      "id": "ig-9-shared-post",
+      "match": { "kind": "singleSegmentPrefix", "prefixes": ["/reel/", "/p/", "/tv/"] },
+      "action": "allowIfSharedPosts",
+      "to": "/direct/inbox/"
+    },
+    { "id": "ig-10-profile", "match": { "kind": "username" }, "action": "allow" },
+    { "id": "ig-11-fallback", "match": { "kind": "any" }, "action": "allow" }
+  ]
+}
