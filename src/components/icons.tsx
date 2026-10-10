@@ -47,3 +47,39 @@ export function IconQr({ color = colors.muted, size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+/** The stories ring button: a plain round ring with a small inner dot. */
+export function IconStories({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="8.25" stroke={color} strokeWidth="1.8" />
+      <Circle cx="12" cy="12" r="3" fill={color} />
+    </Svg>
+  );
+}
+
+/** The Profile tab avatar placeholder (charter 8.6: shows a small circle). */
+export function IconAvatar({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="8.25" stroke={color} strokeWidth="1.8" />
+      <Circle cx="12" cy="9.75" r="2.75" stroke={color} strokeWidth="1.6" />
+      <Path d="M6.4 18.2c1.6-2.6 9.6-2.6 11.2 0" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** The settings gear, drawn from simple strokes. */
+export function IconGear({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="3.25" stroke={color} strokeWidth="1.8" />
+      <Path
+        d="M12 3.5v2.6M12 17.9v2.6M3.5 12h2.6M17.9 12h2.6M6 6l1.9 1.9M16.1 16.1 18 18M18 6l-1.9 1.9M7.9 16.1 6 18"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
