@@ -19,11 +19,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build injected scripts
+      - name: Build injected scripts and userscripts
         run: npm run build:inject
 
-      - name: Generated inject bundle is committed
-        run: git diff --exit-code -- src/inject/generated
+      - name: Generated inject bundles and userscripts are committed
+        run: git diff --exit-code -- src/inject/generated userscripts
 
       - name: Typecheck
         run: npm run typecheck

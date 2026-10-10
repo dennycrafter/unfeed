@@ -7,6 +7,7 @@ import { build, type Plugin } from 'esbuild';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { parseNamedCss } from '../src/inject/cssRules';
+import { buildUserScriptHeader } from '../src/userscript/header';
 
 const root = resolve(__dirname, '..');
 
@@ -66,6 +67,15 @@ export const ${exportName} = ${JSON.stringify(js)};
 `;
     writeFileSync(join(outDir, `${entry}.generated.ts`), module);
     console.log(`build:inject: wrote src/inject/generated/${entry}.generated.ts (${js.length} chars)`);
+
+    // The userscript is the same bundle with a metadata block on top, so the
+    // browser method and the app can never drift (charter T6). Committed to
+    // the repo; CI fails when the committed copy goes stale.
+    const scriptDir = join(root, 'userscripts');
+    mkdirSync(scriptDir, { recursive: true });
+    const header = buildUserScriptHeader(entry as 'instagram' | 'linkedin');
+    writeFileSync(join(scriptDir, `unfeed-${entry}.user.js`), `${header}\n\n${js}`);
+    console.log(`build:inject: wrote userscripts/unfeed-${entry}.user.js`);
   }
 }
 
