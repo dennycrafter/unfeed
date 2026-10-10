@@ -1,6 +1,7 @@
-// The Unfeed shell (T1 tracer): dark header with the app switcher pill, the
-// Instagram host showing DMs, and the Instagram bottom bar. Real tab
-// navigation, stories button and LinkedIn side arrive in T2 and T3.
+// The Unfeed shell (T3): dark header with the app switcher pill and both
+// hosts kept mounted (charter section 4). Switching apps only flips which
+// host is visible, so both WebViews keep their state. Unread dots and
+// lastApp persistence arrive with T5.
 
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -9,6 +10,7 @@ import { BottomBar, type BottomTab } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
 import { IconChat, IconPerson, IconSearch } from '@/components/icons';
 import { InstagramHost } from '@/hosts/InstagramHost';
+import { LinkedInHost } from '@/hosts/LinkedInHost';
 import { DEFAULT_SETTINGS } from '@/state/settings';
 import { colors } from '@/theme/tokens';
 
@@ -22,21 +24,23 @@ export default function Index() {
   const [activeApp, setActiveApp] = useState<AppKey>('instagram');
   const [activeTab, setActiveTab] = useState('dms');
 
-  const handleSelectApp = (app: AppKey) => {
-    // The LinkedIn host and its tabs arrive with T3; until then the pill
-    // renders both apps but only Instagram switches.
-    if (app === 'instagram') setActiveApp(app);
-  };
-
   return (
     <View style={styles.fill}>
-      <Header center={<AppSwitcher active={activeApp} onSelect={handleSelectApp} />} />
-      <InstagramHost context={activeTab} settings={DEFAULT_SETTINGS} />
-      <BottomBar tabs={INSTAGRAM_TABS} active={activeTab} onSelect={setActiveTab} />
+      <Header center={<AppSwitcher active={activeApp} onSelect={setActiveApp} />} />
+      <View style={[styles.hostArea, activeApp !== 'instagram' && styles.hidden]}>
+        <InstagramHost context={activeTab} settings={DEFAULT_SETTINGS} />
+        <BottomBar tabs={INSTAGRAM_TABS} active={activeTab} onSelect={setActiveTab} />
+      </View>
+      <View style={[styles.hostArea, activeApp !== 'linkedin' && styles.hidden]}>
+        {/* QR screen, profile link saving and settings wiring land in T4/T5. */}
+        <LinkedInHost settings={DEFAULT_SETTINGS} />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
+  hostArea: { flex: 1 },
+  hidden: { display: 'none' },
 });

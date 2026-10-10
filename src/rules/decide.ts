@@ -20,7 +20,7 @@ export interface DecideSettings {
   allowSharedPosts: boolean;
 }
 
-const MATCH_KINDS = ['prefix', 'home', 'singleSegmentPrefix', 'username', 'any'] as const;
+const MATCH_KINDS = ['prefix', 'home', 'singleSegmentPrefix', 'username', 'exact', 'any'] as const;
 type MatchKind = (typeof MATCH_KINDS)[number];
 
 const RULE_ACTIONS = ['allow', 'redirect', 'allowIfSharedPosts'] as const;
@@ -38,6 +38,9 @@ interface RouteRule {
   match: RuleMatch;
   action: RuleAction;
   to?: string;
+  /** Query keys copied from the original URL onto a redirect target, for
+   * example the keywords on a LinkedIn content search. */
+  keepQuery?: string[];
 }
 
 interface HostPathRule {
@@ -50,6 +53,9 @@ interface SiteRules {
   hosts: string[];
   allowedHostSuffixes: string[];
   allowedHostPaths: HostPathRule[];
+  /** Hosts where every path loads inside the WebView, for example the
+   * lnkd.in short links whose next hop is checked again (LinkedIn rule 13). */
+  alwaysAllowHosts: string[];
   rules: RouteRule[];
 }
 
@@ -61,9 +67,10 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-/** Lower case, query and hash stripped, trailing slash added (section 8.3). */
+/** Lower case, query and hash stripped, trailing slash added (section 8.3).
+ * Duplicate slashes collapse so `//` still reads as home. */
 export function normalizePath(pathname: string): string {
-  let path = pathname.toLowerCase();
+  let path = pathname.toLowerCase().replace(/\/{2,}/g, '/');
   const query = path.indexOf('?');
   if (query !== -1) path = path.slice(0, query);
   const hash = path.indexOf('#');
@@ -93,6 +100,8 @@ function ruleMatches(rule: RouteRule, path: string, context: string): boolean {
       // By this point every reserved prefix has matched an earlier rule, so
       // anything left is a profile path or an unknown page; both are allowed.
       return path !== '/';
+    case 'exact':
+      return (rule.match.paths ?? []).some((candidate) => path === normalizePath(candidate));
     case 'any':
       return true;
   }
@@ -121,6 +130,9 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
     }
   }
 
+  const alwaysAllowHosts = file.alwaysAllowHosts === undefined ? [] : file.alwaysAllowHosts;
+  if (!isStringArray(alwaysAllowHosts)) fail(site, 'alwaysAllowHosts must be a list of strings');
+
   if (!Array.isArray(file.rules) || file.rules.length === 0) fail(site, 'rules must be a non-empty list');
   const rules: RouteRule[] = file.rules.map((entry, index) => {
     if (typeof entry !== 'object' || entry === null) fail(site, `rule ${index} must be an object`);
@@ -148,11 +160,17 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
       }
       to = record.to;
     }
+    let keepQuery: string[] | undefined;
+    if (record.keepQuery !== undefined) {
+      if (!isStringArray(record.keepQuery)) fail(site, `rule ${id} keepQuery must be strings`);
+      keepQuery = record.keepQuery;
+    }
     return {
       id,
       match: { kind: match.kind as MatchKind, paths: match.paths, prefixes: match.prefixes, context: match.context },
       action,
       to,
+      keepQuery,
     };
   });
   if (!rules.some((rule) => rule.match.kind === 'any')) fail(site, 'rules must include an any fallback');
@@ -162,6 +180,7 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
     hosts: (file.hosts as string[]).map((host) => host.toLowerCase()),
     allowedHostSuffixes: (allowedHostSuffixes as string[]).map((suffix) => suffix.toLowerCase()),
     allowedHostPaths,
+    alwaysAllowHosts: (alwaysAllowHosts as string[]).map((host) => host.toLowerCase()),
     rules,
   };
 }
@@ -174,6 +193,21 @@ export const SITE_ORIGINS: Record<Site, string> = {
 /** Redirect targets are paths; the host resolves against the site origin. */
 export function toAbsoluteUrl(site: Site, path: string): string {
   return SITE_ORIGINS[site] + path;
+}
+
+/** Builds a redirect result, carrying the rule's keepQuery keys from the
+ * original URL onto the target path. */
+function redirectWithQuery(rule: RouteRule, url: URL): DecideResult {
+  const to = rule.to ?? '/';
+  if (!rule.keepQuery || rule.keepQuery.length === 0) {
+    return { action: 'redirect', to, rule: rule.id };
+  }
+  const params = new URLSearchParams();
+  for (const key of rule.keepQuery) {
+    for (const value of url.searchParams.getAll(key)) params.append(key, value);
+  }
+  const query = params.toString();
+  return { action: 'redirect', to: query ? `${to}?${query}` : to, rule: rule.id };
 }
 
 const RULES: Record<Site, SiteRules> = {
@@ -199,6 +233,9 @@ export function decide(site: Site, rawUrl: string, context: string, settings: De
     if (rules.allowedHostSuffixes.some((suffix) => hostMatches(host, suffix))) {
       return { action: 'allow', rule: 'asset-host' };
     }
+    if (rules.alwaysAllowHosts.some((entry) => hostMatches(host, entry))) {
+      return { action: 'allow', rule: 'short-link-host' };
+    }
     for (const entry of rules.allowedHostPaths) {
       if (hostMatches(host, entry.host) && path.startsWith(entry.path)) {
         return { action: 'allow', rule: 'host-path' };
@@ -209,10 +246,10 @@ export function decide(site: Site, rawUrl: string, context: string, settings: De
   for (const rule of rules.rules) {
     if (!ruleMatches(rule, path, context)) continue;
     if (rule.action === 'allow') return { action: 'allow', rule: rule.id };
-    if (rule.action === 'redirect') return { action: 'redirect', to: rule.to, rule: rule.id };
+    if (rule.action === 'redirect') return redirectWithQuery(rule, url);
     return settings.allowSharedPosts
       ? { action: 'allow', rule: rule.id }
-      : { action: 'redirect', to: rule.to, rule: rule.id };
+      : redirectWithQuery(rule, url);
   }
   // parseSiteRules guarantees an any fallback row; this stays as a guard so a
   // bad rules file can never wedge navigation.

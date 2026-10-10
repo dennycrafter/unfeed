@@ -1,0 +1,19 @@
+/* Unfeed hide rules for LinkedIn (charter section 8.4). Stable hooks only:
+   hrefs, roles, aria labels and structure. Hashed class names are never
+   used; fixtures in tests/fixtures carry random hashed classes to prove it.
+   Text-only targets are hidden by the sweeps in src/inject/linkedin.ts. */
+
+/* LinkedIn's own chrome: the top bar and the bottom nav are the containers
+   that link to the feed or the network pages. Unfeed ships native ones. The
+   header hides whenever it carries those links, wherever they nest. */
+header:has(a[href^="/feed/"]),
+header:has(a[href^="/mynetwork/"]),
+nav:has(a[href^="/feed/"]),
+nav:has(a[href^="/mynetwork/"]) {
+  display: none !important;
+}
+
+/* Anything a sweep decided to hide stays hidden even when the page moves it. */
+[data-unfeed-hidden] {
+  display: none !important;
+}
