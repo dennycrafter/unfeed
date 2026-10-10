@@ -80,7 +80,6 @@ export default function Index() {
   const [activeTab, setActiveTab] = useState<InstagramTab>(DEFAULT_TAB);
   const [stories, setStories] = useState<StoriesSession | null>(null);
   const [tabUrls, setTabUrls] = useState<Record<InstagramTab, string>>(TAB_DEFAULT_URLS);
-  const [username, setUsername] = useState<string | null>(null);
   const [unread, setUnread] = useState<{ instagram: number; linkedin: number }>({ instagram: 0, linkedin: 0 });
   const [scrollSignal, setScrollSignal] = useState(0);
   // A scanned Instagram link (T4, charter 8.7) overrides the tab URL until a
@@ -132,9 +131,9 @@ export default function Index() {
         return;
       }
       if (message.type === 'ig-username') {
-        const value = message.value;
-        setUsername(value);
-        setTabUrls((prev) => ({ ...prev, profile: `https://www.instagram.com/${value}/` }));
+        // The profile tab then opens the user's own profile; the value comes
+        // back for display when T5 wires it into settings and the avatar.
+        setTabUrls((prev) => ({ ...prev, profile: `https://www.instagram.com/${message.value}/` }));
         return;
       }
       if (message.type !== 'route') return;
@@ -170,25 +169,27 @@ export default function Index() {
   );
 
   // Android back button (section 8.6): WebView back, then the default tab,
-  // then leave the app. The handler logic lives in a ref so the subscription
-  // happens once with always fresh logic.
+  // then leave the app. The latest handler lives in a ref so the
+  // subscription happens once with always fresh logic.
   const backHandlerRef = useRef<() => boolean>(() => false);
-  backHandlerRef.current = (): boolean => {
-    if (activeApp !== 'instagram') return false;
-    if (stories) {
-      setStories(null);
-      return true;
-    }
-    if (hostRef.current?.canGoBack()) {
-      hostRef.current.goBack();
-      return true;
-    }
-    if (activeTab !== DEFAULT_TAB) {
-      selectTab(DEFAULT_TAB);
-      return true;
-    }
-    return false;
-  };
+  useEffect(() => {
+    backHandlerRef.current = (): boolean => {
+      if (activeApp !== 'instagram') return false;
+      if (stories) {
+        setStories(null);
+        return true;
+      }
+      if (hostRef.current?.canGoBack()) {
+        hostRef.current.goBack();
+        return true;
+      }
+      if (activeTab !== DEFAULT_TAB) {
+        selectTab(DEFAULT_TAB);
+        return true;
+      }
+      return false;
+    };
+  });
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => backHandlerRef.current());
