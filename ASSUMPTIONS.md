@@ -13,4 +13,9 @@ One line per decision made where the master document did not decide for us.
 9. react-native-webview 13 does not re-export its types from the package root, so type only imports come from react-native-webview/lib/WebViewTypes (ShouldStartLoadRequest, WebViewNavigation, WebViewMessageEvent, WebViewProgressEvent).
 10. The parity test runs the generated bundle in a node vm sandbox given URL and console, which are the standard globals the script finds in any real page. A bare sandbox has no URL and every parse would fail there for the wrong reason.
 11. CI gained a step that runs build:inject then checks git diff on src/inject/generated, so a stale committed bundle fails CI and the app and the later userscripts cannot drift.
+12. The injected scripts enforce the route rules inside the page with a neutral tab context, because a page cannot know which native tab is showing. The LinkedIn table has no context dependent rows, so the answer is identical there (the Instagram table's context row is enforced by T2's own entry).
+13. Redirects that keep the query string rebuild it with URLSearchParams, so a space inside keywords comes out as +, the standard form encoding.
+14. The shared path normalizer collapses duplicate slashes, so a URL like https://www.linkedin.com// counts as home and redirects to Messages exactly like / does.
+15. The unread watcher skips an empty document title: at document start the real title is not parsed yet, and an empty title is not a real zero unread state. The first real title posts the count.
+16. LinkedIn's global top bar hides through :has() on its feed and network link hrefs, so the whole header goes wherever those links nest inside it.
 

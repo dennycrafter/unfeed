@@ -1,9 +1,47 @@
 {
   "site": "linkedin",
-  "hosts": ["linkedin.com", "www.linkedin.com", "lnkd.in"],
+  "hosts": ["linkedin.com", "www.linkedin.com"],
   "allowedHostSuffixes": ["licdn.com"],
   "allowedHostPaths": [],
+  "alwaysAllowHosts": ["lnkd.in"],
   "rules": [
-    { "id": "li-0-placeholder-fallback", "match": { "kind": "any" }, "action": "allow" }
+    {
+      "id": "li-1-auth",
+      "match": { "kind": "prefix", "paths": ["/login", "/checkpoint/", "/uas/", "/authwall", "/signup", "/psettings/", "/mypreferences/"] },
+      "action": "allow"
+    },
+    { "id": "li-2-messaging", "match": { "kind": "prefix", "paths": ["/messaging/"] }, "action": "allow" },
+    { "id": "li-3-entities", "match": { "kind": "prefix", "paths": ["/in/", "/company/", "/school/"] }, "action": "allow" },
+    {
+      "id": "li-4-search-people",
+      "match": { "kind": "prefix", "paths": ["/search/results/people/", "/search/results/companies/", "/search/results/all/"] },
+      "action": "allow"
+    },
+    {
+      "id": "li-5-search-content",
+      "match": { "kind": "prefix", "paths": ["/search/results/content/"] },
+      "action": "redirect",
+      "to": "/search/results/people/",
+      "keepQuery": ["keywords"]
+    },
+    { "id": "li-6-invitation-manager", "match": { "kind": "prefix", "paths": ["/mynetwork/invitation-manager/"] }, "action": "allow" },
+    { "id": "li-7-mynetwork", "match": { "kind": "prefix", "paths": ["/mynetwork/"] }, "action": "redirect", "to": "/mynetwork/invitation-manager/" },
+    {
+      "id": "li-8-shared-post",
+      "match": { "kind": "prefix", "paths": ["/feed/update/", "/posts/"] },
+      "action": "allowIfSharedPosts",
+      "to": "/messaging/"
+    },
+    { "id": "li-9-feed", "match": { "kind": "prefix", "paths": ["/feed/"] }, "action": "redirect", "to": "/messaging/" },
+    { "id": "li-9-home", "match": { "kind": "home" }, "action": "redirect", "to": "/messaging/" },
+    {
+      "id": "li-10-distractions",
+      "match": { "kind": "prefix", "paths": ["/notifications/", "/news/", "/video/", "/learning/", "/games/"] },
+      "action": "redirect",
+      "to": "/messaging/"
+    },
+    { "id": "li-10-events-root", "match": { "kind": "exact", "paths": ["/events/"] }, "action": "redirect", "to": "/messaging/" },
+    { "id": "li-11-jobs", "match": { "kind": "prefix", "paths": ["/jobs/"] }, "action": "allow" },
+    { "id": "li-12-fallback", "match": { "kind": "any" }, "action": "allow" }
   ]
 }

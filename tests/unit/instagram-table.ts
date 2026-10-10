@@ -79,5 +79,5 @@ export const INSTAGRAM_DECIDE_TABLE: DecideRow[] = [
   { name: 'about blank passes through', url: 'about:blank', expected: ALLOW },
   { name: 'a data url passes through', url: 'data:text/html,<h1>hi</h1>', expected: ALLOW },
   { name: 'an explicit port is ignored', url: 'https://www.instagram.com:443/direct/t/9/', expected: ALLOW },
-  { name: 'a double slash path allowed', url: 'https://www.instagram.com//', expected: ALLOW },
+  { name: 'a double slash path is home', url: 'https://www.instagram.com//', expected: toInbox },
 ];

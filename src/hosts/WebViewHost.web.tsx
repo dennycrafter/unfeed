@@ -3,15 +3,28 @@
 // URL the native WebView would load, so the shell can be screenshotted from
 // the web export.
 
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { decide, toAbsoluteUrl } from '../rules/decide';
 import { colors, radius } from '../theme/tokens';
-import type { WebViewHostProps } from './types';
+import type { WebViewHostApi, WebViewHostProps } from './types';
 
-export function WebViewHost({ site, url, context, settings, placeholderLabel }: WebViewHostProps) {
+export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function WebViewHost(
+  { site, url, context, settings, placeholderLabel },
+  ref,
+) {
   const result = decide(site, url, context, settings);
   const displayUrl = result.action === 'redirect' ? toAbsoluteUrl(site, result.to ?? '/') : url;
   const siteLabel = site === 'instagram' ? 'Instagram' : 'LinkedIn';
+
+  // No real page on web: the tab behaviour API is a no-op.
+  const api = useRef<WebViewHostApi>({
+    scrollTop() {},
+    goBack() {},
+    canGoBack: () => false,
+  });
+  useImperativeHandle(ref, () => api.current, []);
+
   return (
     <View style={styles.fill}>
       <View style={styles.panel} testID="webview-placeholder">
@@ -23,7 +36,7 @@ export function WebViewHost({ site, url, context, settings, placeholderLabel }: 
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },

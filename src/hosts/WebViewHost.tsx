@@ -1,8 +1,9 @@
 // Native WebView host (charter sections 4, 8.1 and 8.2). One WebView per
 // site, route guard wired into all three navigation surfaces, and a thin 2px
-// loading bar under the header line (section 10).
+// loading bar under the header line (section 10). The ref exposes the small
+// imperative API the tab behaviour needs (section 8.6).
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type {
@@ -13,9 +14,10 @@ import type {
 } from 'react-native-webview/lib/WebViewTypes';
 import * as Linking from 'expo-linking';
 import { parsePageMessage } from '../inject/protocol';
+import { buildSettingsPreamble } from '../inject/settingsPreamble';
 import { decide, toAbsoluteUrl, type DecideResult, type Site } from '../rules/decide';
 import { colors } from '../theme/tokens';
-import type { WebViewHostProps } from './types';
+import type { WebViewHostApi, WebViewHostProps } from './types';
 
 export const IPHONE_USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
@@ -33,10 +35,14 @@ function redirectTarget(site: Site, result: DecideResult, requestedUrl: string):
   return requestedUrl === target ? null : target;
 }
 
-export function WebViewHost({ site, url, context, settings, injectScript, onMessage, style }: WebViewHostProps) {
+export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function WebViewHost(
+  { site, url, context, settings, hideCounts = false, injectScript, onMessage, style, placeholderLabel },
+  ref,
+) {
   const webViewRef = useRef<WebView | null>(null);
   const [source, setSource] = useState(url);
   const [progress, setProgress] = useState(0);
+  const canGoBackRef = useRef(false);
 
   // Refs keep the latest tab context and settings visible inside callbacks
   // without resubscribing the WebView handler props on every render.
@@ -51,6 +57,22 @@ export function WebViewHost({ site, url, context, settings, injectScript, onMess
     setSource(url);
   }, [url]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollTop() {
+        webViewRef.current?.injectJavaScript('window.scrollTo(0, 0); true;');
+      },
+      goBack() {
+        webViewRef.current?.goBack();
+      },
+      canGoBack() {
+        return canGoBackRef.current;
+      },
+    }),
+    [],
+  );
+
   const runGuard = useCallback(
     (rawUrl: string): DecideResult => decide(site, rawUrl, contextRef.current, settingsRef.current),
     [site],
@@ -64,6 +86,7 @@ export function WebViewHost({ site, url, context, settings, injectScript, onMess
 
   const handleShouldStartLoad = useCallback(
     (request: ShouldStartLoadRequest): boolean => {
+      canGoBackRef.current = request.canGoBack;
       const result = runGuard(request.url);
       if (result.action === 'allow') return true;
       if (result.action === 'external') {
@@ -79,6 +102,7 @@ export function WebViewHost({ site, url, context, settings, injectScript, onMess
 
   const handleNavigationStateChange = useCallback(
     (state: WebViewNavigation): void => {
+      canGoBackRef.current = state.canGoBack;
       const target = redirectTarget(site, runGuard(state.url), state.url);
       if (target) setSource(target);
     },
@@ -111,6 +135,12 @@ export function WebViewHost({ site, url, context, settings, injectScript, onMess
 
   const handleLoadEnd = useCallback(() => setProgress(0), []);
 
+  // The page reads settings before the main script runs (charter 8.4/8.5).
+  const script = useMemo(
+    () => buildSettingsPreamble({ allowSharedPosts: settings.allowSharedPosts, hideCounts }) + injectScript,
+    [hideCounts, injectScript, settings.allowSharedPosts],
+  );
+
   return (
     <View style={[styles.fill, style]}>
       <WebView
@@ -127,7 +157,7 @@ export function WebViewHost({ site, url, context, settings, injectScript, onMess
         allowsBackForwardNavigationGestures
         pullToRefreshEnabled
         setSupportMultipleWindows={false}
-        injectedJavaScriptBeforeContentLoaded={injectScript}
+        injectedJavaScriptBeforeContentLoaded={script}
         onShouldStartLoadWithRequest={handleShouldStartLoad}
         onNavigationStateChange={handleNavigationStateChange}
         onMessage={handleMessage}
@@ -141,7 +171,7 @@ export function WebViewHost({ site, url, context, settings, injectScript, onMess
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },

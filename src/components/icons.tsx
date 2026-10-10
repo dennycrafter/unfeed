@@ -35,3 +35,15 @@ export function IconPerson({ color = colors.muted, size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+export function IconQr({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="4" y="4" width="6" height="6" rx="1" stroke={color} strokeWidth="1.8" />
+      <Rect x="14" y="4" width="6" height="6" rx="1" stroke={color} strokeWidth="1.8" />
+      <Rect x="4" y="14" width="6" height="6" rx="1" stroke={color} strokeWidth="1.8" />
+      <Rect x="14.5" y="14.5" width="2.2" height="2.2" fill={color} stroke="none" />
+      <Rect x="17.8" y="17.8" width="2.2" height="2.2" fill={color} stroke="none" />
+    </Svg>
+  );
+}
