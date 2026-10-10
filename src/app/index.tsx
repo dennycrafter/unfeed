@@ -80,9 +80,11 @@ export default function Index() {
   const [activeTab, setActiveTab] = useState<InstagramTab>(DEFAULT_TAB);
   const [stories, setStories] = useState<StoriesSession | null>(null);
   const [tabUrls, setTabUrls] = useState<Record<InstagramTab, string>>(TAB_DEFAULT_URLS);
-  const [username, setUsername] = useState<string | null>(null);
   const [unread, setUnread] = useState<{ instagram: number; linkedin: number }>({ instagram: 0, linkedin: 0 });
   const [scrollSignal, setScrollSignal] = useState(0);
+  // A scanned Instagram link (T4, charter 8.7) overrides the tab URL until a
+  // bottom tab is pressed, like the stories override below.
+  const [scannedUrl, setScannedUrl] = useState<string | null>(null);
   const hostRef = useRef<InstagramHostHandle | null>(null);
 
   // Switching apps only flips which host is showing; each WebView keeps its
@@ -93,6 +95,7 @@ export default function Index() {
 
   const selectTab = useCallback(
     (tab: InstagramTab) => {
+      setScannedUrl(null);
       if (stories) {
         // Leaving the stories tray or a story: back to the tab, its own URL.
         setStories(null);
@@ -110,8 +113,16 @@ export default function Index() {
   );
 
   const openStories = useCallback(() => {
+    setScannedUrl(null);
     setStories((current) => current ?? { origin: activeTab, seenStory: false });
   }, [activeTab]);
+
+  // A scanned Instagram link switches apps and moves the WebView, all in the
+  // sheet's event handler (charter 8.7).
+  const openInstagramUrl = useCallback((url: string): void => {
+    setScannedUrl(url);
+    setActiveApp('instagram');
+  }, []);
 
   const handleMessage = useCallback(
     (message: PageMessage) => {
@@ -120,14 +131,19 @@ export default function Index() {
         return;
       }
       if (message.type === 'ig-username') {
-        const value = message.value;
-        setUsername(value);
-        setTabUrls((prev) => ({ ...prev, profile: `https://www.instagram.com/${value}/` }));
+        // The profile tab then opens the user's own profile; the value comes
+        // back for display when T5 wires it into settings and the avatar.
+        setTabUrls((prev) => ({ ...prev, profile: `https://www.instagram.com/${message.value}/` }));
         return;
       }
       if (message.type !== 'route') return;
       const path = pathOf(message.url);
       if (!path) return;
+      if (scannedUrl) {
+        // Showing a scanned link (charter 8.7): tab URLs stay as they were, a
+        // bottom tab press returns to them.
+        return;
+      }
       if (stories) {
         if (path.startsWith('/stories/')) {
           setStories((current) => (current ? { ...current, seenStory: true } : current));
@@ -149,29 +165,31 @@ export default function Index() {
       }
       setTabUrls((prev) => (prev[activeTab] === message.url ? prev : { ...prev, [activeTab]: message.url }));
     },
-    [activeTab, stories],
+    [activeTab, scannedUrl, stories],
   );
 
   // Android back button (section 8.6): WebView back, then the default tab,
-  // then leave the app. The handler logic lives in a ref so the subscription
-  // happens once with always fresh logic.
+  // then leave the app. The latest handler lives in a ref so the
+  // subscription happens once with always fresh logic.
   const backHandlerRef = useRef<() => boolean>(() => false);
-  backHandlerRef.current = (): boolean => {
-    if (activeApp !== 'instagram') return false;
-    if (stories) {
-      setStories(null);
-      return true;
-    }
-    if (hostRef.current?.canGoBack()) {
-      hostRef.current.goBack();
-      return true;
-    }
-    if (activeTab !== DEFAULT_TAB) {
-      selectTab(DEFAULT_TAB);
-      return true;
-    }
-    return false;
-  };
+  useEffect(() => {
+    backHandlerRef.current = (): boolean => {
+      if (activeApp !== 'instagram') return false;
+      if (stories) {
+        setStories(null);
+        return true;
+      }
+      if (hostRef.current?.canGoBack()) {
+        hostRef.current.goBack();
+        return true;
+      }
+      if (activeTab !== DEFAULT_TAB) {
+        selectTab(DEFAULT_TAB);
+        return true;
+      }
+      return false;
+    };
+  });
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => backHandlerRef.current());
@@ -188,8 +206,8 @@ export default function Index() {
       <View style={[styles.hostArea, activeApp !== 'instagram' && styles.hidden]}>
         <InstagramHost
           ref={hostRef}
-          url={stories ? INSTAGRAM_ROOT_URL : tabUrls[activeTab]}
-          context={stories ? 'stories' : activeTab}
+          url={stories ? INSTAGRAM_ROOT_URL : (scannedUrl ?? tabUrls[activeTab])}
+          context={stories ? 'stories' : (scannedUrl ? 'profile' : activeTab)}
           settings={DEFAULT_SETTINGS}
           onMessage={handleMessage}
           scrollToTopSignal={scrollSignal}
@@ -197,8 +215,7 @@ export default function Index() {
         <BottomBar tabs={INSTAGRAM_TABS} active={activeTab} onSelect={selectTab} />
       </View>
       <View style={[styles.hostArea, activeApp !== 'linkedin' && styles.hidden]}>
-        {/* QR screen, profile link saving and settings wiring land in T4/T5. */}
-        <LinkedInHost settings={DEFAULT_SETTINGS} />
+        <LinkedInHost settings={DEFAULT_SETTINGS} onOpenInstagramUrl={openInstagramUrl} />
       </View>
     </View>
   );

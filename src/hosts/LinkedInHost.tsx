@@ -7,7 +7,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { BottomBar, type BottomTab } from '../components/BottomBar';
-import { EmptyState } from '../components/EmptyState';
 import { IconChat, IconPerson, IconQr, IconSearch } from '../components/icons';
 import { SearchBar } from '../components/SearchBar';
 import type { PageMessage } from '../inject/protocol';
@@ -15,6 +14,7 @@ import { LINKEDIN_INJECT_SCRIPT } from '../inject/generated/linkedin.generated';
 import { buildPeopleSearchUrl, extractVanityFromUrl, isLinkedInUrl } from './linkedinUrl';
 import type { DecideSettings } from '../rules/decide';
 import { loadRecentSearches, nextRecentSearches, saveRecentSearches } from '../state/recentSearches';
+import { QrScreen } from '../qr/QrScreen';
 import { colors } from '../theme/tokens';
 import type { WebViewHostApi } from './types';
 import { WebViewHost } from './WebViewHost';
@@ -32,6 +32,8 @@ export interface LinkedInHostProps {
   profileUrl?: string | null;
   /** Fires with the profile URL once the WebView lands on /in/<vanity>/. */
   onProfileVanityDetected?: (profileUrl: string) => void;
+  /** Opens a scanned Instagram link in the Instagram app (charter 8.7). */
+  onOpenInstagramUrl?: (url: string) => void;
   onMessage?: (message: PageMessage) => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -58,6 +60,7 @@ export function LinkedInHost({
   haptics = true,
   profileUrl,
   onProfileVanityDetected,
+  onOpenInstagramUrl,
   onMessage,
   style,
 }: LinkedInHostProps) {
@@ -97,6 +100,13 @@ export function LinkedInHost({
     });
   }, [haptics]);
 
+  // The saved profile link is Denis's own. It is only captured from the
+  // /in/me/ redirect the Profile tab starts, never from landing on someone
+  // else's profile (a scanned or browsed friend), so My code keeps showing
+  // the right person (assumption 17 in ASSUMPTIONS.md).
+  const expectOwnVanityRef = useRef(false);
+  const returnToQrRef = useRef(false);
+
   // Tab switching never remounts the WebView: same host, new context and,
   // when the tab carries its own URL, a new source (charter section 4).
   const goTab = useCallback(
@@ -105,10 +115,14 @@ export function LinkedInHost({
         hostRef.current?.scrollTop();
         return;
       }
+      if (tab === 'profile' && !profileUrl) {
+        // The tab opens on /in/me/, so the landing vanity is Denis's own.
+        expectOwnVanityRef.current = true;
+      }
       tick();
       setActiveTab(tab);
     },
-    [tick],
+    [profileUrl, tick],
   );
 
   const handleTabSelect = useCallback(
@@ -133,12 +147,41 @@ export function LinkedInHost({
     (message: PageMessage): void => {
       if (message.type === 'route' && isLinkedInUrl(message.url)) {
         const vanity = extractVanityFromUrl(message.url);
-        if (vanity) onProfileVanityDetected?.(`https://www.linkedin.com/in/${vanity}/`);
+        if (vanity && expectOwnVanityRef.current) {
+          expectOwnVanityRef.current = false;
+          onProfileVanityDetected?.(`https://www.linkedin.com/in/${vanity}/`);
+          if (returnToQrRef.current) {
+            returnToQrRef.current = false;
+            setActiveTab('qr');
+          }
+        }
       }
       onMessage?.(message);
     },
     [onMessage, onProfileVanityDetected],
   );
+
+  // Scanned LinkedIn codes (charter 8.7): a profile opens in the Profile tab,
+  // a share link without a vanity opens in Messages, because the QR panel
+  // covers the page in the QR tab (assumption 18 in ASSUMPTIONS.md).
+  const openScannedLinkedInUrl = useCallback((url: string): void => {
+    if (extractVanityFromUrl(url)) {
+      setTabUrls((current) => ({ ...current, profile: url }));
+      setActiveTab('profile');
+      return;
+    }
+    setTabUrls((current) => ({ ...current, messages: url }));
+    setActiveTab('messages');
+  }, []);
+
+  // My code empty state (charter 8.7): load /in/me/, save the landing vanity
+  // and come back to the QR screen.
+  const findMyProfile = useCallback((): void => {
+    expectOwnVanityRef.current = true;
+    returnToQrRef.current = true;
+    setTabUrls((current) => ({ ...current, profile: LINKEDIN_PROFILE_ME_URL }));
+    setActiveTab('profile');
+  }, []);
 
   // Charter section 8.6: back in the page, then the default tab, then the app.
   useEffect(() => {
@@ -182,8 +225,13 @@ export function LinkedInHost({
         />
         {activeTab === 'qr' ? (
           <View style={styles.qrPanel}>
-            {/* The scanner and My code screens land with T4 (charter 8.7). */}
-            <EmptyState message="The QR scanner and your code arrive with the next update." />
+            <QrScreen
+              profileUrl={profileUrl ?? null}
+              haptics={haptics}
+              onOpenLinkedInUrl={openScannedLinkedInUrl}
+              onOpenInstagramUrl={(url) => onOpenInstagramUrl?.(url)}
+              onFindProfile={findMyProfile}
+            />
           </View>
         ) : null}
       </View>

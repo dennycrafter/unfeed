@@ -18,4 +18,7 @@ One line per decision made where the master document did not decide for us.
 14. The shared path normalizer collapses duplicate slashes, so a URL like https://www.linkedin.com// counts as home and redirects to Messages exactly like / does.
 15. The unread watcher skips an empty document title: at document start the real title is not parsed yet, and an empty title is not a real zero unread state. The first real title posts the count.
 16. LinkedIn's global top bar hides through :has() on its feed and network link hrefs, so the whole header goes wherever those links nest inside it.
+17. A profile link is only saved as Denis's own when it comes from the /in/me/ redirect started by the Profile tab or the My code "Find my profile" button. Browsing or scanning someone else's profile never overwrites the saved link, so My code keeps showing the right person.
+18. A scanned LinkedIn link that contains a vanity path opens on the Profile tab, and every other LinkedIn link opens on the Messages tab. The QR panel covers the page, so a scanned page loaded under the QR tab would be invisible to Denis.
+19. The ?scan= and ?profile= router params fill the scan sheet and My code at mount. Deep links and web page loads always start the screen fresh, so the params only need to be read once and no effect is used.
 
