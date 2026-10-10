@@ -1,7 +1,8 @@
 // Web stand in for react-native-webview, which has no web support (gotcha 8).
 // It runs the same route guard and renders a placeholder panel saying which
 // URL the native WebView would load, so the shell can be screenshotted from
-// the web export.
+// the web export. The imperative handle is a no-op: the web preview has no
+// WebView history.
 
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';

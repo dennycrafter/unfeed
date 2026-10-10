@@ -6,19 +6,19 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/tokens';
 
-export interface BottomTab {
-  key: string;
+export interface BottomTab<K extends string = string> {
+  key: K;
   label: string;
   icon: (color: string) => ReactNode;
 }
 
-interface BottomBarProps {
-  tabs: BottomTab[];
-  active: string;
-  onSelect?: (key: string) => void;
+interface BottomBarProps<K extends string = string> {
+  tabs: BottomTab<K>[];
+  active: K;
+  onSelect?: (key: K) => void;
 }
 
-export function BottomBar({ tabs, active, onSelect }: BottomBarProps) {
+export function BottomBar<K extends string = string>({ tabs, active, onSelect }: BottomBarProps<K>) {
   const insets = useSafeAreaInsets();
   return (
     <View

@@ -4,6 +4,17 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { PageMessage } from '../inject/protocol';
 import type { DecideSettings, Site } from '../rules/decide';
 
+/** Route guard settings plus the page side toggles. The full Settings type
+ * satisfies this shape. */
+export type HostSettings = DecideSettings & { hideCounts?: boolean };
+
+/** Imperative controls the shell needs for the Android back button and the
+ * tab re-press scroll to top. */
+export interface WebViewHostHandle {
+  goBack: () => void;
+  canGoBack: () => boolean;
+}
+
 export interface WebViewHostProps {
   site: Site;
   /** Full URL the host should be showing. */
@@ -15,8 +26,10 @@ export interface WebViewHostProps {
   hideCounts?: boolean;
   /** Generated inject script for this site, from src/inject/generated. */
   injectScript: string;
-  /** Parsed messages from the page (route changes, errors). */
+  /** Parsed messages from the page (route changes, unread, errors). */
   onMessage?: (message: PageMessage) => void;
+  /** Bump this number to scroll the page to the top (active tab re-press). */
+  scrollToTopSignal?: number;
   style?: StyleProp<ViewStyle>;
   /** Web preview only: a short label for the placeholder panel. */
   placeholderLabel?: string;

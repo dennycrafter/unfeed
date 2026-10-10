@@ -1,7 +1,7 @@
-// Native WebView host (charter sections 4, 8.1 and 8.2). One WebView per
-// site, route guard wired into all three navigation surfaces, and a thin 2px
-// loading bar under the header line (section 10). The ref exposes the small
-// imperative API the tab behaviour needs (section 8.6).
+// Native WebView host (charter sections 4, 8.1, 8.2 and 8.6). One WebView per
+// site, route guard wired into all three navigation surfaces, a thin 2px
+// loading bar under the header line (section 10), and the imperative handle
+// for the tab behaviour (scroll to top on a re-press, Android back).
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -36,7 +36,7 @@ function redirectTarget(site: Site, result: DecideResult, requestedUrl: string):
 }
 
 export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function WebViewHost(
-  { site, url, context, settings, hideCounts = false, injectScript, onMessage, style, placeholderLabel },
+  { site, url, context, settings, hideCounts = false, injectScript, onMessage, scrollToTopSignal = 0, style, placeholderLabel },
   ref,
 ) {
   const webViewRef = useRef<WebView | null>(null);
@@ -135,11 +135,18 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
 
   const handleLoadEnd = useCallback(() => setProgress(0), []);
 
-  // The page reads settings before the main script runs (charter 8.4/8.5).
+  // The page reads the settings and the tab context that caused this load
+  // before the main script runs (charter sections 8.4 and 8.5).
   const script = useMemo(
-    () => buildSettingsPreamble({ allowSharedPosts: settings.allowSharedPosts, hideCounts }) + injectScript,
-    [hideCounts, injectScript, settings.allowSharedPosts],
+    () => buildSettingsPreamble({ allowSharedPosts: settings.allowSharedPosts, hideCounts }, context) + injectScript,
+    [context, hideCounts, injectScript, settings.allowSharedPosts],
   );
+
+  // A second press on the active tab scrolls the page to the top (section
+  // 8.6); the imperative scrollTop covers shells that hold the ref instead.
+  useEffect(() => {
+    if (scrollToTopSignal > 0) webViewRef.current?.injectJavaScript('window.scrollTo(0, 0); true;');
+  }, [scrollToTopSignal]);
 
   return (
     <View style={[styles.fill, style]}>
