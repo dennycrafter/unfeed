@@ -38,6 +38,26 @@ test.describe('instagram screens at phone size', () => {
   });
 });
 
+// Instagram My code (stretch S1): the fourth Instagram tab shows the profile
+// QR, seeded on the web preview with the ?igUsername= param, the same split
+// as the unread seeds in the shell.
+test.describe('instagram my code at phone size', () => {
+  test('my code shows the profile QR for the detected username', async ({ page }) => {
+    await page.goto(`/?igUsername=${encodeURIComponent('denis')}`);
+    await page.getByRole('tab', { name: 'QR tab' }).click();
+    await expect(page.getByTestId('my-code-qr')).toBeVisible();
+    await expect(page.getByText('https://www.instagram.com/denis/')).toBeVisible();
+    await page.screenshot({ path: screenshot('s1-instagram-my-code.png') });
+  });
+
+  test('my code empty state offers the profile detour', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('tab', { name: 'QR tab' }).click();
+    await expect(page.getByText('No Instagram profile link saved yet.')).toBeVisible();
+    await page.screenshot({ path: screenshot('s1-instagram-my-code-empty.png') });
+  });
+});
+
 // The QA evidence platform requires a 720px shorter edge minimum, so the same
 // four screens are captured wider; the charter phone captures stay above.
 test.describe('qa capture', () => {
@@ -62,5 +82,19 @@ test.describe('qa capture', () => {
     await page.getByRole('button', { name: 'Stories' }).click();
     await expect(page.getByText('tab: stories')).toBeVisible();
     await page.screenshot({ path: screenshot('t2-instagram-stories-720.png') });
+  });
+
+  test('instagram my code at the qa evidence size', async ({ page }) => {
+    await page.goto(`/?igUsername=${encodeURIComponent('denis')}`);
+    await page.getByRole('tab', { name: 'QR tab' }).click();
+    await expect(page.getByTestId('my-code-qr')).toBeVisible();
+    await page.screenshot({ path: screenshot('s1-instagram-my-code-720.png') });
+  });
+
+  test('instagram my code empty state at the qa evidence size', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('tab', { name: 'QR tab' }).click();
+    await expect(page.getByText('No Instagram profile link saved yet.')).toBeVisible();
+    await page.screenshot({ path: screenshot('s1-instagram-my-code-empty-720.png') });
   });
 });

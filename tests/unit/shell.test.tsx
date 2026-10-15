@@ -150,3 +150,35 @@ test('haptics follow the settings toggle', async () => {
   fireEvent.press(getByLabelText('Instagram'));
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
 });
+
+// Instagram My code (stretch S1): a fourth Instagram tab whose panel shows
+// the profile QR, the same screen design as the LinkedIn one (charter 14).
+describe('Instagram My code', () => {
+  test('the QR tab shows the profile QR for the saved username', async () => {
+    await AsyncStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ ...DEFAULT_SETTINGS, igUsername: 'denis' }),
+    );
+    await hydrateSettings();
+    const { getByLabelText, getByTestId, getByText } = render(<Shell />);
+    fireEvent.press(getByLabelText('QR tab'));
+    expect(getByTestId('my-code-qr')).toBeTruthy();
+    expect(getByText('https://www.instagram.com/denis/')).toBeTruthy();
+    // The panel is an overlay: the host and its WebView stay mounted.
+    expect(getByTestId('webview-instagram', anyVisibility)).toBeTruthy();
+    expect(isHidden(getByTestId('host-instagram', anyVisibility))).toBe(false);
+  });
+
+  test('without a username the panel offers the profile detour', async () => {
+    await hydrateSettings();
+    const { getByLabelText, getByText } = render(<Shell />);
+    fireEvent.press(getByLabelText('QR tab'));
+    expect(getByText('No Instagram profile link saved yet.')).toBeTruthy();
+    fireEvent.press(getByLabelText('Find my profile'));
+    // The detour opens the profile tab, whose page load lets the injected
+    // script report the username; the panel returns when it does.
+    expect(getByLabelText('Profile tab').props.accessibilityState).toEqual(
+      expect.objectContaining({ selected: true }),
+    );
+  });
+});
