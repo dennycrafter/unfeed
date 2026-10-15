@@ -23,11 +23,14 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 
 ## Status (checked 15 Oct)
 - Every planned ticket (T0 to T6) is done and merged (PRs 1 to 9).
-- Tests are green on `main`:
-  - 370 of 370 Jest unit tests (re-run by Claude on 11 Oct)
-  - 23 Playwright inject tests and 29 screen tests (per the build report)
-  - type check clean
-- Nothing has changed since the overnight build. `BLOCKERS.md` is empty.
+- Full CI is green on `main`:
+  - 370 of 370 unit tests
+  - Playwright inject and screen tests
+  - type check
+  - lint
+  - expo-doctor
+- 15 Oct: Expo released new SDK 57 patch versions, which made CI's `expo-doctor` check fail. PR #12 bumped expo to ~57.0.30 plus the matching patches. CI is green again. Still SDK 57.
+- `BLOCKERS.md` is empty.
 - **Ignore branch `stretch/s1`** (Instagram "My code" QR). I never asked for it, so don't merge it.
 
 ## Known limits (not bugs)
