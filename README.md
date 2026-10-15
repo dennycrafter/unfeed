@@ -13,17 +13,37 @@ One app, two services, no feeds:
 
 The app is an Expo (React Native) app that shows the official Instagram and LinkedIn mobile websites inside web views. Every navigation is checked against a list of rules before it loads. Rules and hiding styles live in one place in the code and are shared by the app and the browser scripts below.
 
-## Get it on your iPhone tonight
+## Get it on your iPhone (no PC needed)
 
-You need a Windows PC, an iPhone, and about 20 minutes.
+The app is uploaded to Expo's servers (EAS Update), so Expo Go on the iPhone loads it from there. The PC can be off.
+
+1. On the iPhone, install "Expo Go" from the App Store: https://apps.apple.com/app/expo-go/id982107779
+2. Open Expo Go, tap the avatar in the top right corner, log in as denispopov.
+3. On the Expo Go home screen, under Projects, tap unfeed. Tap the branch called main, then the newest update. The app opens.
+4. If unfeed is not listed, open https://expo.dev/accounts/denispopov/projects/unfeed on the iPhone, open the newest update and tap Preview.
+5. Log into Instagram and LinkedIn once inside the app. Use your username and password: the Google and Facebook sign in buttons often refuse to work inside app web views.
+6. If Instagram or LinkedIn show a security check like "Was this you?", approve it in the app or by email. That is normal for a new login, not a bug.
+
+The phone still needs internet, the same as the real Instagram and LinkedIn apps.
+
+### Sending a new version to the phone
+
+After any change to the app, run this once on the PC in the project folder: npm run publish:phone
+Then close and reopen unfeed in Expo Go. It picks up the new version.
+
+The upload is marked for Expo Go SDK 57 (app.json, ios.runtimeVersion policy "sdkVersion"). Keep it that way: Expo Go only opens updates marked with its own SDK.
+
+## Run it from the PC instead (for development)
+
+This is the live development mode: changes on the PC show up on the phone straight away, but the PC must stay on. You need a Windows PC, an iPhone, and about 20 minutes.
 
 1. On the PC, install Node.js LTS from nodejs.org if you do not have it.
 2. Download this repo: click the green Code button, choose Download ZIP, then unzip it, for example to C:\Users\Denis Popov\Documents\claude-workspace\unfeed.
 3. Open Command Prompt in that folder: click the folder in File Explorer, type cmd in the address bar, press Enter.
 4. In Command Prompt run: npm install
 5. Make a free account at expo.dev if you do not have one. The Expo Go app now requires a login to run projects (new since September 2026).
-6. In Command Prompt run: npx expo login
-   Log in with the same account in the browser window that opens.
+6. In Command Prompt run: npx expo login --browser
+   Log in with the same account in the browser window that opens. If the command stops with an error about cmd.exe, it printed a login link first: open that link yourself and log in.
 7. In Command Prompt run: npx expo start --tunnel
    Leave that window open.
 8. On the iPhone: install "Expo Go" from the App Store. Open Expo Go, tap the avatar in the top right corner, log in with the same account.
@@ -31,7 +51,7 @@ You need a Windows PC, an iPhone, and about 20 minutes.
 10. Log into Instagram and LinkedIn once inside the app. Use your username and password: the Google and Facebook sign in buttons often refuse to work inside app web views.
 11. If Instagram or LinkedIn show a security check like "Was this you?", approve it in the app or by email. That is normal for a new login, not a bug.
 
-The PC must stay on with the Command Prompt window open while you use the app. Expo Go loads the app from the PC. When you close the window, the app stops until you run step 7 again.
+In this mode the PC must stay on with the Command Prompt window open while you use the app. For everyday use, use the no PC method above.
 
 ## Use the home screen method instead
 
@@ -47,15 +67,15 @@ You need the free "Userscripts" app from the App Store.
 6. Tapping those icons now opens Instagram or LinkedIn with no feed: home bounces to your DMs or Messages automatically, and the feed parts are hidden.
 7. Check on your phone: confirm the feed does not appear and messages load. If hiding stops working one day, the site changed its page. Update the userscript files the same way as step 3.
 
-The phone app (Expo Go) is the main way to use Unfeed. The userscripts are the backup when the PC is off, and the desktop version: on Chrome or Firefox, install Tampermonkey and add both .user.js files the same way.
+The phone app (Expo Go) is the main way to use Unfeed. The userscripts are the backup without Expo Go, and the desktop version: on Chrome or Firefox, install Tampermonkey and add both .user.js files the same way.
 
 ## How to update
 
 1. On the PC, download the repo again (green Code button, Download ZIP) or run git pull if you cloned it. Unzip over the old folder.
 2. In Command Prompt in that folder run: npm install
 3. Run: npm run build:inject
-4. Run: npx expo start --tunnel
-5. In Expo Go on the iPhone, pull down on the project list to reload, or tap the app again from the QR code.
+4. Run: npm run publish:phone
+5. In Expo Go on the iPhone, close unfeed and open it again. It loads the new version.
 6. For the userscripts: save the new .user.js files into the Userscripts app again (step 3 above). Tampermonkey checks for a new @version by itself.
 
 ## What's not possible and why

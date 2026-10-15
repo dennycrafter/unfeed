@@ -20,6 +20,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
+    "expo-updates": "~57.0.26",
     "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -60,7 +61,8 @@
     "test:inject": "playwright test --config=playwright.inject.config.ts",
     "test:screens": "npm run build:inject && npx expo export --platform web && playwright test --config=playwright.screens.config.ts",
     "build:inject": "tsx scripts/build-inject.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "publish:phone": "npx eas-cli@latest update --branch main --environment production --platform ios --non-interactive --message \"Update from PC\""
   },
   "private": true,
   "jest": {
