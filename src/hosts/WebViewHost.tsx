@@ -4,7 +4,7 @@
 // for the tab behaviour (scroll to top on a re-press, Android back).
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type {
   ShouldStartLoadRequest,
@@ -17,6 +17,7 @@ import { parsePageMessage } from '../inject/protocol';
 import { buildSettingsPreamble } from '../inject/settingsPreamble';
 import { decide, toAbsoluteUrl, type DecideResult, type Site } from '../rules/decide';
 import { colors } from '../theme/tokens';
+import { loadDecision } from './loadDecision';
 import type { WebViewHostApi, WebViewHostProps } from './types';
 
 export const IPHONE_USER_AGENT =
@@ -89,10 +90,15 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
 
   const handleShouldStartLoad = useCallback(
     (request: ShouldStartLoadRequest): boolean => {
-      canGoBackRef.current = request.canGoBack;
+      if (request.isTopFrame !== false) canGoBackRef.current = request.canGoBack;
       const result = runGuard(request.url);
-      if (result.action === 'allow') return true;
-      if (result.action === 'external') {
+      const decision = loadDecision(result, {
+        isTopFrame: request.isTopFrame,
+        navigationType: request.navigationType,
+        platform: Platform.OS,
+      });
+      if (decision === 'load') return true;
+      if (decision === 'open-outside') {
         openOutside(request.url);
         return false;
       }
