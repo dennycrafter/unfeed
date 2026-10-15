@@ -32,25 +32,25 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 - 15 Oct: Expo released new SDK 57 patch versions, which made CI's `expo-doctor` check fail. PR #12 bumped expo to ~57.0.30 plus the matching patches. CI is green again. Still SDK 57.
 - `BLOCKERS.md` is empty.
 - **Ignore branch `stretch/s1`** (Instagram "My code" QR). I never asked for it, so don't merge it.
+- 15 Oct: the app now runs without my PC. It is linked to my Expo account (`denispopov`, project `@denispopov/unfeed`) and published with EAS Update on branch `main`, runtime `exposdk:57.0.0` so Expo Go can open it. `expo-updates` was added for this. Publish a new version with `npm run publish:phone`. README "Get it on your iPhone (no PC needed)" has the phone steps.
+- On Windows, 2 userscript unit tests and expo-doctor's `ios.icon` check fail locally because of CRLF line endings and the `.icon` folder. They pass in CI on Linux, which is the source of truth.
 
 ## Known limits (not bugs)
-- **The app needs my PC on to run.** Expo Go loads the app from my PC, which must be on with `npx expo start --tunnel` running. My PC is usually off, so this is the biggest practical problem.
+- **It runs inside Expo Go, not as its own app.** A standalone app with its own icon needs a paid Apple developer account ($99 a year), which I don't have.
+- **Keep the update runtime on `sdkVersion`.** Expo Go only opens updates marked `exposdk:57.0.0`. Moving to SDK 58 later means Expo Go on the App Store must support it first.
 - No push notifications from either site.
 - Some voice notes or media may not play inside the web views.
 - Google and Facebook login buttons often fail inside the app. Use username and password instead.
 - Both sites change their pages often, so the hide rules may need updating over time (`AGENTS.md` explains how).
 
 ## What's next
-1. **Me, on my phone:** first-time setup and testing, following `DENIS_TODO.md` and README "Get it on your iPhone tonight":
-   - make an expo.dev account and log in on the PC and in Expo Go
+1. **Me, on my phone:** first-time setup and testing, following `DENIS_TODO.md` and README "Get it on your iPhone (no PC needed)":
+   - log in as `denispopov` in Expo Go and open unfeed from Projects
    - log into Instagram and LinkedIn inside the app
    - test the LinkedIn QR scanner with the camera
    - try the Safari userscripts home screen method
 2. **Fix whatever breaks** in step 1. Expect selector or route tweaks once it's running against the real sites.
-3. **Solve the "PC must be on" problem.** Options to look into:
-   - an EAS development build plus EAS Update. This needs an `EXPO_TOKEN`, and installing on iPhone may need an Apple developer account, which I don't have.
-   - leaning on the Safari userscripts method instead, which needs no PC.
-   Explain the options to me simply before doing anything.
+3. ~~Solve the "PC must be on" problem.~~ Done 15 Oct with EAS Update into Expo Go (see Status). After any code change, run `npm run publish:phone` so the phone gets it.
 
 ## Rules for working on this
 - Read `AGENTS.md` before touching code. Expo changes a lot, so check the SDK 57 docs instead of relying on memory.

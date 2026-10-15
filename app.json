@@ -8,7 +8,10 @@
     "scheme": "unfeed",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "runtimeVersion": {
+        "policy": "sdkVersion"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -43,6 +46,15 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4a404dde-c1e0-4494-92e6-5746635da8fa"
+      }
+    },
+    "owner": "denispopov",
+    "updates": {
+      "url": "https://u.expo.dev/4a404dde-c1e0-4494-92e6-5746635da8fa"
     }
   }
 }
