@@ -24,6 +24,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
     goBack() {},
     canGoBack: () => false,
     clearCache() {},
+    runScript() {},
   });
   useImperativeHandle(ref, () => api.current, []);
 

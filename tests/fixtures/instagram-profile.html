@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- Instagram own profile fixture, shaped like the live site on 15 Oct 2026:
+     the nav links sit in a fixed div with no nav element, each link carries
+     an svg aria-label. The profile's own Reels tab and the header New post
+     control live in the page and must stay. A Use the app sheet is pinned to
+     the bottom. Class names are fake hashes. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>yourprofile | Instagram</title>
+  </head>
+  <body>
+    <div class="x1n2onr6 shell">
+      <div class="xh8yej3 bar" style="position: fixed; bottom: 0; left: 0; right: 0; height: 48px">
+        <a class="x1i10hfl" href="/" role="link"><svg aria-label="Home" width="24" height="24"></svg></a>
+        <a class="x1i10hfl" href="/explore/" role="link"><svg aria-label="Explore" width="24" height="24"></svg></a>
+        <a class="x1i10hfl" href="/reels/" role="link"><svg aria-label="Reels" width="24" height="24"></svg></a>
+        <a class="x1i10hfl bar-create" href="#" role="link" onclick="window.__createPressed = true; return false"><svg aria-label="New post" width="24" height="24"></svg></a>
+        <a class="x1i10hfl" href="/direct/inbox/" role="link"><svg aria-label="Messages" width="24" height="24"></svg></a>
+      </div>
+      <main class="x78zum5 profile" role="main">
+        <header class="profile-header">
+          <h2 class="profile-username">yourprofile</h2>
+          <a class="profile-options" href="#" role="link"><svg aria-label="Options" width="24" height="24"></svg></a>
+        </header>
+        <div class="profile-tabs">
+          <a class="profile-tab-posts" href="/yourprofile/" role="link"><svg aria-label="Posts" width="24" height="24"></svg></a>
+          <a class="profile-tab-reels" href="/yourprofile/reels/" role="link"><svg aria-label="Reels" width="24" height="24"></svg></a>
+        </div>
+      </main>
+      <div class="x9f619 app-sheet" style="position: fixed; bottom: 48px; left: 0; right: 0">
+        <span>Instagram is better in the app</span>
+        <button class="app-sheet-button">Use the app</button>
+      </div>
+    </div>
+  </body>
+</html>

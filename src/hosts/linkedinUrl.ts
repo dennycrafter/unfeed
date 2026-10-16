@@ -28,6 +28,15 @@ export function extractVanityFromUrl(rawUrl: string): string | null {
   }
 }
 
+/** A typed in profile link as a full URL, so the QR code opens in any
+ * scanner: "linkedin.com/in/ada" becomes "https://linkedin.com/in/ada".
+ * Returns null for blank text. */
+export function normalizeProfileUrl(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return null;
+  return /^https?:\/\//i.test(text) ? text : `https://${text.replace(/^\/+/, '')}`;
+}
+
 /** The people search URL for keywords (charter section 8.6). */
 export function buildPeopleSearchUrl(keywords: string): string {
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(keywords)}`;

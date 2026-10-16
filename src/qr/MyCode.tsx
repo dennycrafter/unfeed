@@ -1,31 +1,36 @@
 // My code (charter section 8.7): the QR of the saved LinkedIn profile link,
 // black on white with a 16px quiet zone, the link in muted text below and a
 // Share link button. Without a saved link: an empty state that finds the
-// profile first.
+// profile first, or sends Denis to Settings to type it in.
 
 import { Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { EmptyState } from '../components/EmptyState';
+import { normalizeProfileUrl } from '../hosts/linkedinUrl';
 import { colors, radius } from '../theme/tokens';
 
 interface MyCodeProps {
   profileUrl: string | null;
   onFindProfile: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function MyCode({ profileUrl, onFindProfile }: MyCodeProps) {
-  if (!profileUrl) {
+export function MyCode({ profileUrl, onFindProfile, onOpenSettings }: MyCodeProps) {
+  const link = profileUrl ? normalizeProfileUrl(profileUrl) : null;
+  if (!link) {
     return (
       <EmptyState
         message="No LinkedIn profile link saved yet."
         actionLabel="Find my profile"
         onAction={onFindProfile}
+        secondaryLabel={onOpenSettings ? 'Or type it in Settings' : undefined}
+        onSecondary={onOpenSettings}
       />
     );
   }
 
   const share = (): void => {
-    Share.share({ message: profileUrl }).catch((error: unknown) => {
+    Share.share({ message: link }).catch((error: unknown) => {
       console.warn('[unfeed] share failed', error);
     });
   };
@@ -34,7 +39,7 @@ export function MyCode({ profileUrl, onFindProfile }: MyCodeProps) {
     <View style={styles.center}>
       <View style={styles.codeCard}>
         <QRCode
-          value={profileUrl}
+          value={link}
           size={240}
           color="black"
           backgroundColor="#ffffff"
@@ -43,7 +48,7 @@ export function MyCode({ profileUrl, onFindProfile }: MyCodeProps) {
         />
       </View>
       <Text style={styles.url} numberOfLines={2}>
-        {profileUrl}
+        {link}
       </Text>
       <TouchableOpacity
         style={styles.accentButton}

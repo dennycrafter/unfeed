@@ -21,6 +21,10 @@ interface QrScreenProps {
   onOpenInstagramUrl: (url: string) => void;
   /** Loads /in/me/ so the vanity detection can save the own profile link. */
   onFindProfile: () => void;
+  /** Opens the settings screen, where the profile link can be typed in. */
+  onOpenSettings?: () => void;
+  /** Closes the panel; shown as a quiet Close button next to the segments. */
+  onClose?: () => void;
 }
 
 interface SheetAction {
@@ -45,6 +49,8 @@ export function QrScreen({
   onOpenLinkedInUrl,
   onOpenInstagramUrl,
   onFindProfile,
+  onOpenSettings,
+  onClose,
 }: QrScreenProps) {
   const [segment, setSegment] = useState<Segment>('scan');
   const params = useLocalSearchParams<{ scan?: string | string[]; profile?: string | string[] }>();
@@ -155,12 +161,26 @@ export function QrScreen({
             </TouchableOpacity>
           );
         })}
+        {onClose ? (
+          <TouchableOpacity
+            style={styles.close}
+            accessibilityRole="button"
+            accessibilityLabel="Close QR"
+            onPress={onClose}
+          >
+            <Text style={styles.segmentText}>Close</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {segment === 'scan' ? (
         <Scanner haptics={haptics} onResult={handleScanResult} />
       ) : (
-        <MyCode profileUrl={previewProfile ?? profileUrl} onFindProfile={onFindProfile} />
+        <MyCode
+          profileUrl={previewProfile ?? profileUrl}
+          onFindProfile={onFindProfile}
+          onOpenSettings={onOpenSettings}
+        />
       )}
 
       {sheet ? (
@@ -223,6 +243,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   segmentActive: { backgroundColor: colors.surface2 },
+  close: { justifyContent: 'center', paddingHorizontal: 8 },
   segmentText: { color: colors.muted, fontSize: 13, fontWeight: '600' },
   segmentActiveText: { color: colors.silver },
   sheetBackdrop: {

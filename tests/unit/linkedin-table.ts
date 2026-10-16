@@ -15,7 +15,6 @@ export interface DecideRow {
 
 const ALLOW = { action: 'allow' as const };
 const toMessaging = { action: 'redirect' as const, to: '/messaging/' };
-const toInvites = { action: 'redirect' as const, to: '/mynetwork/invitation-manager/' };
 const EXTERNAL = { action: 'external' as const };
 
 export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
@@ -57,8 +56,10 @@ export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
     url: 'https://www.linkedin.com/search/results/content/?keywords=ada&sortBy=dd',
     expected: { action: 'redirect' as const, to: '/search/results/people/?keywords=ada' },
   },
-  // My Network (rules li-6 and li-7)
-  { name: 'my network root redirects to the invitation manager', url: 'https://www.linkedin.com/mynetwork/', expected: toInvites },
+  // My Network (rules li-6 and li-7): the whole section is allowed since
+  // Denis kept LinkedIn's own bar (15 Oct 2026).
+  { name: 'my network root allowed', url: 'https://www.linkedin.com/mynetwork/', expected: ALLOW },
+  { name: 'my network grow page allowed', url: 'https://www.linkedin.com/mynetwork/grow/', expected: ALLOW },
   {
     name: 'the invitation manager allowed',
     url: 'https://www.linkedin.com/mynetwork/invitation-manager/',
@@ -98,8 +99,14 @@ export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
   { name: 'the feed root redirects to Messages', url: 'https://www.linkedin.com/feed/', expected: toMessaging },
   { name: 'the feed without a trailing slash redirects', url: 'https://www.linkedin.com/feed', expected: toMessaging },
   { name: 'the feed in upper case redirects', url: 'https://www.linkedin.com/FEED/', expected: toMessaging },
+  { name: 'the feed with an unrelated query redirects', url: 'https://www.linkedin.com/feed/?nis=true', expected: toMessaging },
+  // The post composer on the feed path (rule li-8-composer)
+  { name: 'the post composer allowed', url: 'https://www.linkedin.com/feed/?shareActive=true', expected: ALLOW },
+  { name: 'the post composer allowed with other keys', url: 'https://www.linkedin.com/feed/?shareActive=true&text=hi', expected: ALLOW },
+  { name: 'a post new page allowed', url: 'https://www.linkedin.com/post/new/', expected: ALLOW },
+  // Notifications (allowed since 15 Oct 2026)
+  { name: 'notifications allowed', url: 'https://www.linkedin.com/notifications/', expected: ALLOW },
   // Distractions (rule li-10)
-  { name: 'notifications redirect to Messages', url: 'https://www.linkedin.com/notifications/', expected: toMessaging },
   { name: 'news redirect to Messages', url: 'https://www.linkedin.com/news/story/abc/', expected: toMessaging },
   { name: 'video redirect to Messages', url: 'https://www.linkedin.com/video/event/abc/', expected: toMessaging },
   { name: 'learning redirect to Messages', url: 'https://www.linkedin.com/learning/courses/abc/', expected: toMessaging },

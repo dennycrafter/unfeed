@@ -1,19 +1,14 @@
-// LinkedIn host (charter sections 8.6 and 9 T3): one persistent WebView plus
-// the native bottom bar (Messages, Search, QR, Profile). Tabs move the same
-// WebView to a new URL; tapping the active tab scrolls to the top; the
-// Android back button goes back in the page, then to Messages, then leaves.
+// LinkedIn host: one persistent WebView that shows LinkedIn's own top and
+// bottom bars (Home and the feed hidden by the inject script), plus the QR
+// panel the header button opens. Denis chose LinkedIn's bars over native tabs
+// on 15 Oct 2026, so this host no longer draws a bottom bar of its own.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { BottomBar, type BottomTab } from '../components/BottomBar';
-import { IconChat, IconPerson, IconQr, IconSearch } from '../components/icons';
-import { SearchBar } from '../components/SearchBar';
 import type { PageMessage } from '../inject/protocol';
 import { LINKEDIN_INJECT_SCRIPT } from '../inject/generated/linkedin.generated';
-import { buildPeopleSearchUrl, extractVanityFromUrl, isLinkedInUrl } from './linkedinUrl';
+import { extractVanityFromUrl, isLinkedInUrl } from './linkedinUrl';
 import type { DecideSettings } from '../rules/decide';
-import { loadRecentSearches, nextRecentSearches, saveRecentSearches } from '../state/recentSearches';
 import { QrScreen } from '../qr/QrScreen';
 import { colors } from '../theme/tokens';
 import type { WebViewHostApi } from './types';
@@ -25,39 +20,26 @@ export const LINKEDIN_PROFILE_ME_URL = 'https://www.linkedin.com/in/me/';
  * Expo Go has no per site cookie API (charter 8.8, see ASSUMPTIONS). */
 export const LINKEDIN_LOGOUT_URL = 'https://www.linkedin.com/m/logout/';
 
-export type LinkedInTab = 'messages' | 'search' | 'qr' | 'profile';
-
 export interface LinkedInHostProps {
   settings: DecideSettings;
   hideCounts?: boolean;
   haptics?: boolean;
-  /** Saved profile URL from settings; used until a vanity is detected. */
+  /** Saved profile URL from settings, shown as My code. */
   profileUrl?: string | null;
   /** Bump to sign the session out: load the logout page, then back to
    * Messages, where the site shows its login (settings screen request). */
   logoutSignal?: number;
-  /** Fires with the profile URL once the WebView lands on /in/<vanity>/. */
+  /** Whether the QR panel covers the page; the header button owns it. */
+  qrOpen?: boolean;
+  onQrOpenChange?: (open: boolean) => void;
+  /** Fires with Denis's own profile URL once the page reveals it. */
   onProfileVanityDetected?: (profileUrl: string) => void;
   /** Opens a scanned Instagram link in the Instagram app (charter 8.7). */
   onOpenInstagramUrl?: (url: string) => void;
+  /** Opens the settings screen, where the profile link can be typed in. */
+  onOpenSettings?: () => void;
   onMessage?: (message: PageMessage) => void;
   style?: StyleProp<ViewStyle>;
-}
-
-export interface LinkedInHostApi {
-  goTab(tab: LinkedInTab): void;
-  goBack(): void;
-}
-
-const DEFAULT_TAB: LinkedInTab = 'messages';
-
-function initialTabUrls(profileUrl: string | null | undefined): Record<LinkedInTab, string> {
-  return {
-    messages: LINKEDIN_MESSENGER_URL,
-    search: LINKEDIN_MESSENGER_URL,
-    qr: LINKEDIN_MESSENGER_URL,
-    profile: profileUrl || LINKEDIN_PROFILE_ME_URL,
-  };
 }
 
 export function LinkedInHost({
@@ -66,206 +48,145 @@ export function LinkedInHost({
   haptics = true,
   profileUrl,
   logoutSignal = 0,
+  qrOpen = false,
+  onQrOpenChange,
   onProfileVanityDetected,
   onOpenInstagramUrl,
+  onOpenSettings,
   onMessage,
   style,
 }: LinkedInHostProps) {
   const hostRef = useRef<WebViewHostApi | null>(null);
-  const [activeTab, setActiveTab] = useState<LinkedInTab>(DEFAULT_TAB);
-  const [tabUrls, setTabUrls] = useState<Record<LinkedInTab, string>>(() => initialTabUrls(profileUrl));
-  const [recents, setRecents] = useState<string[]>([]);
-  const activeTabRef = useRef(activeTab);
-
+  const [url, setUrl] = useState(LINKEDIN_MESSENGER_URL);
+  const urlRef = useRef(url);
+  const qrOpenRef = useRef(qrOpen);
   useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
+    urlRef.current = url;
+    qrOpenRef.current = qrOpen;
+  }, [qrOpen, url]);
 
-  // Log out (settings screen request): land the Messages tab on the site's
-  // own logout page, then bring the inbox URL back so the login shows. The
-  // signal id is remembered so one request only ever runs once.
+  /** Moves the WebView. The same URL twice would not reload through the
+   * source prop, so a repeat goes through the page instead. */
+  const navigate = useCallback((target: string): void => {
+    if (target === urlRef.current) {
+      hostRef.current?.runScript(`window.location.assign(${JSON.stringify(target)})`);
+      return;
+    }
+    setUrl(target);
+  }, []);
+
+  // Log out (settings screen request): land on the site's own logout page,
+  // then bring the inbox URL back so the login shows. The signal id is
+  // remembered so one request only ever runs once.
   const lastLogoutRef = useRef(0);
   useEffect(() => {
     if (logoutSignal === 0 || logoutSignal === lastLogoutRef.current) return;
     lastLogoutRef.current = logoutSignal;
-    setActiveTab(DEFAULT_TAB);
+    onQrOpenChange?.(false);
     hostRef.current?.clearCache();
-    setTabUrls((current) => ({ ...current, messages: LINKEDIN_LOGOUT_URL }));
-    const timer = setTimeout(() => {
-      setTabUrls((current) => ({ ...current, messages: LINKEDIN_MESSENGER_URL }));
-    }, 2500);
+    setUrl(LINKEDIN_LOGOUT_URL);
+    const timer = setTimeout(() => setUrl(LINKEDIN_MESSENGER_URL), 2500);
     return () => clearTimeout(timer);
-  }, [logoutSignal]);
+  }, [logoutSignal, onQrOpenChange]);
 
-  useEffect(() => {
-    let cancelled = false;
-    loadRecentSearches().then((loaded) => {
-      if (!cancelled) setRecents(loaded);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // A new saved profile URL moves the Profile tab (settings edit or first
-  // detection); the QR tab never carries a page. Adjusted during render on
-  // the prop change, the React endorsed alternative to an effect.
-  const [lastProfileUrl, setLastProfileUrl] = useState(profileUrl);
-  if (profileUrl !== lastProfileUrl) {
-    setLastProfileUrl(profileUrl);
-    if (profileUrl) setTabUrls((current) => ({ ...current, profile: profileUrl }));
-  }
-
-  const tick = useCallback((): void => {
-    if (!haptics) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((error: unknown) => {
-      console.warn('[unfeed] haptic failed', error);
-    });
-  }, [haptics]);
-
-  // The saved profile link is Denis's own. It is only captured from the
-  // /in/me/ redirect the Profile tab starts, never from landing on someone
-  // else's profile (a scanned or browsed friend), so My code keeps showing
-  // the right person (assumption 17 in ASSUMPTIONS.md).
-  const expectOwnVanityRef = useRef(false);
+  // Find my profile (QR empty state): load /in/me/ and reopen the QR panel
+  // once the page reveals the own profile link.
   const returnToQrRef = useRef(false);
+  const expectOwnVanityRef = useRef(false);
 
-  // Tab switching never remounts the WebView: same host, new context and,
-  // when the tab carries its own URL, a new source (charter section 4).
-  const goTab = useCallback(
-    (tab: LinkedInTab): void => {
-      if (tab === activeTabRef.current) {
-        hostRef.current?.scrollTop();
-        return;
+  const saveOwnProfile = useCallback(
+    (ownUrl: string): void => {
+      expectOwnVanityRef.current = false;
+      onProfileVanityDetected?.(ownUrl);
+      if (returnToQrRef.current) {
+        returnToQrRef.current = false;
+        onQrOpenChange?.(true);
       }
-      if (tab === 'profile' && !profileUrl) {
-        // The tab opens on /in/me/, so the landing vanity is Denis's own.
-        expectOwnVanityRef.current = true;
-      }
-      tick();
-      setActiveTab(tab);
     },
-    [profileUrl, tick],
+    [onProfileVanityDetected, onQrOpenChange],
   );
-
-  const handleTabSelect = useCallback(
-    (key: string): void => {
-      goTab(key as LinkedInTab);
-    },
-    [goTab],
-  );
-
-  const handleSearchSubmit = useCallback((keywords: string): void => {
-    const url = buildPeopleSearchUrl(keywords);
-    setTabUrls((current) => ({ ...current, search: url }));
-    setActiveTab('search');
-    setRecents((current) => {
-      const next = nextRecentSearches(current, keywords);
-      void saveRecentSearches(next);
-      return next;
-    });
-  }, []);
 
   const handleMessage = useCallback(
     (message: PageMessage): void => {
-      if (message.type === 'route' && isLinkedInUrl(message.url)) {
+      if (message.type === 'li-own-profile') {
+        // Only the own profile carries edit links, so this is always Denis.
+        saveOwnProfile(message.url);
+      } else if (message.type === 'route' && isLinkedInUrl(message.url)) {
         const vanity = extractVanityFromUrl(message.url);
-        if (vanity && expectOwnVanityRef.current) {
-          expectOwnVanityRef.current = false;
-          onProfileVanityDetected?.(`https://www.linkedin.com/in/${vanity}/`);
-          if (returnToQrRef.current) {
-            returnToQrRef.current = false;
-            setActiveTab('qr');
-          }
+        const isSelf = message.url.includes('isSelfProfile=true');
+        if (vanity && (expectOwnVanityRef.current || isSelf)) {
+          saveOwnProfile(`https://www.linkedin.com/in/${vanity}/`);
         }
       }
       onMessage?.(message);
     },
-    [onMessage, onProfileVanityDetected],
+    [onMessage, saveOwnProfile],
   );
 
-  // Scanned LinkedIn codes (charter 8.7): a profile opens in the Profile tab,
-  // a share link without a vanity opens in Messages, because the QR panel
-  // covers the page in the QR tab (assumption 18 in ASSUMPTIONS.md).
-  const openScannedLinkedInUrl = useCallback((url: string): void => {
-    if (extractVanityFromUrl(url)) {
-      setTabUrls((current) => ({ ...current, profile: url }));
-      setActiveTab('profile');
-      return;
-    }
-    setTabUrls((current) => ({ ...current, messages: url }));
-    setActiveTab('messages');
-  }, []);
+  // Scanned LinkedIn codes (charter 8.7) open in the page behind the panel.
+  const openScannedLinkedInUrl = useCallback(
+    (scanned: string): void => {
+      onQrOpenChange?.(false);
+      navigate(scanned);
+    },
+    [navigate, onQrOpenChange],
+  );
 
-  // My code empty state (charter 8.7): load /in/me/, save the landing vanity
-  // and come back to the QR screen.
   const findMyProfile = useCallback((): void => {
     expectOwnVanityRef.current = true;
     returnToQrRef.current = true;
-    setTabUrls((current) => ({ ...current, profile: LINKEDIN_PROFILE_ME_URL }));
-    setActiveTab('profile');
-  }, []);
+    onQrOpenChange?.(false);
+    navigate(LINKEDIN_PROFILE_ME_URL);
+  }, [navigate, onQrOpenChange]);
 
-  // Charter section 8.6: back in the page, then the default tab, then the app.
+  // Android back: close the QR panel, then back in the page, then leave.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (hostRef.current?.canGoBack()) {
-        hostRef.current.goBack();
+      if (qrOpenRef.current) {
+        onQrOpenChange?.(false);
         return true;
       }
-      if (activeTabRef.current !== DEFAULT_TAB) {
-        setActiveTab(DEFAULT_TAB);
+      if (hostRef.current?.canGoBack()) {
+        hostRef.current.goBack();
         return true;
       }
       return false;
     });
     return () => subscription.remove();
-  }, []);
-
-  const tabs: BottomTab[] = [
-    { key: 'messages', label: 'Messages', icon: (color) => <IconChat color={color} /> },
-    { key: 'search', label: 'Search', icon: (color) => <IconSearch color={color} /> },
-    { key: 'qr', label: 'QR', icon: (color) => <IconQr color={color} /> },
-    { key: 'profile', label: 'Profile', icon: (color) => <IconPerson color={color} /> },
-  ];
+  }, [onQrOpenChange]);
 
   return (
     <View style={[styles.fill, style]}>
-      <View style={styles.page}>
-        {activeTab === 'search' ? (
-          <SearchBar recents={recents} onSubmit={handleSearchSubmit} />
-        ) : null}
-        <WebViewHost
-          ref={hostRef}
-          site="linkedin"
-          url={tabUrls[activeTab]}
-          context={activeTab}
-          settings={settings}
-          hideCounts={hideCounts}
-          injectScript={LINKEDIN_INJECT_SCRIPT}
-          onMessage={handleMessage}
-          placeholderLabel={`LinkedIn ${activeTab} (web preview)`}
-        />
-        {activeTab === 'qr' ? (
-          <View style={styles.qrPanel}>
-            <QrScreen
-              profileUrl={profileUrl ?? null}
-              haptics={haptics}
-              onOpenLinkedInUrl={openScannedLinkedInUrl}
-              onOpenInstagramUrl={(url) => onOpenInstagramUrl?.(url)}
-              onFindProfile={findMyProfile}
-            />
-          </View>
-        ) : null}
-      </View>
-      <BottomBar tabs={tabs} active={activeTab} onSelect={handleTabSelect} />
+      <WebViewHost
+        ref={hostRef}
+        site="linkedin"
+        url={url}
+        context="page"
+        settings={settings}
+        hideCounts={hideCounts}
+        injectScript={LINKEDIN_INJECT_SCRIPT}
+        onMessage={handleMessage}
+        placeholderLabel="LinkedIn (web preview)"
+      />
+      {qrOpen ? (
+        <View style={styles.qrPanel}>
+          <QrScreen
+            profileUrl={profileUrl ?? null}
+            haptics={haptics}
+            onOpenLinkedInUrl={openScannedLinkedInUrl}
+            onOpenInstagramUrl={(scanned) => onOpenInstagramUrl?.(scanned)}
+            onFindProfile={findMyProfile}
+            onOpenSettings={onOpenSettings}
+            onClose={() => onQrOpenChange?.(false)}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
-  page: { flex: 1 },
   qrPanel: {
     position: 'absolute',
     top: 0,

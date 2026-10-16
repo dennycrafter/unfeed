@@ -34,6 +34,12 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 - **Ignore branch `stretch/s1`** (Instagram "My code" QR). I never asked for it, so don't merge it.
 - 15 Oct: the app now runs without my PC. It is linked to my Expo account (`denispopov`, project `@denispopov/unfeed`) and published with EAS Update on branch `main`, runtime `exposdk:57.0.0` so Expo Go can open it. `expo-updates` was added for this. Publish a new version with `npm run publish:phone`. README "Get it on your iPhone (no PC needed)" has the phone steps.
 - On Windows, 2 userscript unit tests and expo-doctor's `ios.icon` check fail locally because of CRLF line endings and the `.icon` folder. They pass in CI on Linux, which is the source of truth.
+- 15 Oct (PR #14): hidden frames (Facebook login sync, trackers) no longer open Safari. Only a link I tap to another site goes to Safari.
+- 16 Oct: my phone test feedback, built while I was away:
+  - Instagram's own bars and "get the app" banners are hidden by a sweep that finds the links by their icon labels (the site has no nav element). See ASSUMPTIONS 25.
+  - Instagram bar is now Search, DMs, **Post**, Profile. Post presses Instagram's own hidden New post control (ASSUMPTIONS 26). Not yet confirmed on my phone.
+  - LinkedIn uses **its own** top and bottom bars, with Home and every feed link hidden. Notifications and My Network are allowed. Unfeed's LinkedIn bottom bar is gone (the old Search bar and recent searches code is unused now, kept until I say it can go). QR moved to the header's left button, with a Close button.
+  - QR "My code" was empty because LinkedIn no longer moves /in/me/ to my real profile URL. The app now reads it from the edit links on my own profile (ASSUMPTIONS 28), and the empty state points to Settings to type it in.
 
 ## Known limits (not bugs)
 - **It runs inside Expo Go, not as its own app.** A standalone app with its own icon needs a paid Apple developer account ($99 a year), which I don't have.
@@ -51,6 +57,7 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
    - try the Safari userscripts home screen method
 2. **Fix whatever breaks** in step 1. Expect selector or route tweaks once it's running against the real sites.
 3. ~~Solve the "PC must be on" problem.~~ Done 15 Oct with EAS Update into Expo Go (see Status). After any code change, run `npm run publish:phone` so the phone gets it.
+4. **Check the 16 Oct changes on my phone:** Instagram bars and banner gone, Post opens the create screen, LinkedIn shows its own bars without Home, QR My code fills in after opening my own profile once.
 
 ## Rules for working on this
 - Read `AGENTS.md` before touching code. Expo changes a lot, so check the SDK 57 docs instead of relying on memory.

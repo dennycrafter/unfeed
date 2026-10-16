@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.0.0
+// @version 1.1.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*
@@ -18,13 +18,11 @@
    used; fixtures in tests/fixtures carry random hashed classes to prove it.
    Text-only targets are hidden by the sweeps in src/inject/linkedin.ts. */
 
-/* LinkedIn's own chrome: the top bar and the bottom nav are the containers
-   that link to the feed or the network pages. Unfeed ships native ones. The
-   header hides whenever it carries those links, wherever they nest. */
-header:has(a[href^="/feed/"]),
-header:has(a[href^="/mynetwork/"]),
-nav:has(a[href^="/feed/"]),
-nav:has(a[href^="/mynetwork/"]) {
+/* LinkedIn's own top and bottom bars stay (Denis, 15 Oct 2026). Only the
+   ways into the feed go: the Home item and any other link to /feed/. Shared
+   posts (/feed/update/) and the post composer (shareActive) are not feed. */
+a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]),
+a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]) {
   display: none !important;
 }
 
@@ -95,7 +93,12 @@ nav:has(a[href^="/mynetwork/"]) {
         keepQuery: ["keywords"]
       },
       { id: "li-6-invitation-manager", match: { kind: "prefix", paths: ["/mynetwork/invitation-manager/"] }, action: "allow" },
-      { id: "li-7-mynetwork", match: { kind: "prefix", paths: ["/mynetwork/"] }, action: "redirect", to: "/mynetwork/invitation-manager/" },
+      { id: "li-7-mynetwork", match: { kind: "prefix", paths: ["/mynetwork/"] }, action: "allow" },
+      {
+        id: "li-8-composer",
+        match: { kind: "prefix", paths: ["/feed/"], query: ["shareActive"] },
+        action: "allow"
+      },
       {
         id: "li-8-shared-post",
         match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
@@ -106,7 +109,7 @@ nav:has(a[href^="/mynetwork/"]) {
       { id: "li-9-home", match: { kind: "home" }, action: "redirect", to: "/messaging/" },
       {
         id: "li-10-distractions",
-        match: { kind: "prefix", paths: ["/notifications/", "/news/", "/video/", "/learning/", "/games/"] },
+        match: { kind: "prefix", paths: ["/news/", "/video/", "/learning/", "/games/"] },
         action: "redirect",
         to: "/messaging/"
       },
@@ -138,8 +141,10 @@ nav:has(a[href^="/mynetwork/"]) {
   function hostMatches(host, pattern) {
     return host === pattern || host.endsWith(`.${pattern}`);
   }
-  function ruleMatches(rule, path, context) {
+  function ruleMatches(rule, path, context, url) {
     var _a, _b, _c;
+    const query = rule.match.query;
+    if (query && !query.every((key) => url.searchParams.has(key))) return false;
     switch (rule.match.kind) {
       case "prefix":
         return ((_a = rule.match.paths) != null ? _a : []).some((prefix) => path.startsWith(prefix));
@@ -198,6 +203,7 @@ nav:has(a[href^="/mynetwork/"]) {
       if (match.context !== void 0 && typeof match.context !== "string") {
         fail(site, `rule ${id} context must be a string`);
       }
+      if (match.query !== void 0 && !isStringArray(match.query)) fail(site, `rule ${id} query must be strings`);
       if (typeof record.action !== "string" || !RULE_ACTIONS.includes(record.action)) {
         fail(site, `rule ${id} has unknown action "${String(record.action)}"`);
       }
@@ -216,7 +222,13 @@ nav:has(a[href^="/mynetwork/"]) {
       }
       return {
         id,
-        match: { kind: match.kind, paths: match.paths, prefixes: match.prefixes, context: match.context },
+        match: {
+          kind: match.kind,
+          paths: match.paths,
+          prefixes: match.prefixes,
+          context: match.context,
+          query: match.query
+        },
         action,
         to,
         keepQuery
@@ -277,7 +289,7 @@ nav:has(a[href^="/mynetwork/"]) {
       return { action: "external", rule: "outside-host" };
     }
     for (const rule of rules.rules) {
-      if (!ruleMatches(rule, path, context)) continue;
+      if (!ruleMatches(rule, path, context, url)) continue;
       if (rule.action === "allow") return { action: "allow", rule: rule.id };
       if (rule.action === "redirect") return redirectWithQuery(rule, url);
       return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url);
@@ -557,9 +569,59 @@ nav:has(a[href^="/mynetwork/"]) {
       if (COUNT_PATTERN.test(((_a = element.textContent) != null ? _a : "").trim())) hide(element);
     }
   };
+  function inSiteBar(element) {
+    let node = element;
+    for (let hop = 0; node !== null && hop < 8; hop += 1) {
+      if (["NAV", "HEADER", "FOOTER"].includes(node.tagName) || node.getAttribute("role") === "navigation") return true;
+      const position = getComputedStyle(node).position;
+      if (position === "fixed" || position === "sticky") return true;
+      node = node.parentElement;
+    }
+    return false;
+  }
+  var hideHomeItem = () => {
+    var _a;
+    for (const item of document.querySelectorAll('a, button, [role="link"], [role="button"], [role="tab"]')) {
+      if (isHidden(item)) continue;
+      if (((_a = item.textContent) != null ? _a : "").trim().toLowerCase() !== "home") continue;
+      if (inSiteBar(item)) hide(item);
+    }
+  };
+  var hideFeedBehindComposer = () => {
+    if (!location.pathname.toLowerCase().startsWith("/feed")) return;
+    hideAllMatching(
+      document,
+      '[data-urn^="urn:li:activity"], [data-urn^="urn:li:share"], [data-urn^="urn:li:ugcPost"], [data-id^="urn:li:activity"]'
+    );
+  };
+  var OWN_PROFILE_EDIT = /\/in\/([^/?#]+)\/edit\//;
+  var detectOwnProfile = (_settings, post) => {
+    var _a, _b, _c;
+    if (!isOnProfilePage()) return;
+    const scope = globalThis;
+    const state = scope.__UNFEED_LI__ = (_a = scope.__UNFEED_LI__) != null ? _a : {};
+    for (const anchor of document.querySelectorAll('a[href*="/in/"][href*="/edit/"]')) {
+      const match = OWN_PROFILE_EDIT.exec((_b = anchor.getAttribute("href")) != null ? _b : "");
+      const vanity = (_c = match == null ? void 0 : match[1]) == null ? void 0 : _c.toLowerCase();
+      if (!vanity || vanity === "me") continue;
+      const url = `https://www.linkedin.com/in/${vanity}/`;
+      if (state.postedProfile === url) return;
+      state.postedProfile = url;
+      post({ type: "li-own-profile", url });
+      return;
+    }
+  };
   setupInject("linkedin", {
     css: linkedin_default,
-    sweeps: [hideSearchPosts, hideProfileSuggestions, hideBannersAndUpsells, hideCountTexts],
+    sweeps: [
+      hideSearchPosts,
+      hideProfileSuggestions,
+      hideBannersAndUpsells,
+      hideCountTexts,
+      hideHomeItem,
+      hideFeedBehindComposer,
+      detectOwnProfile
+    ],
     unread: true,
     enforce: true
   });

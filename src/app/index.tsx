@@ -11,7 +11,8 @@ import { router } from 'expo-router';
 import { AppSwitcher, type AppKey } from '@/components/AppSwitcher';
 import { BottomBar, type BottomTab } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
-import { IconAvatar, IconChat, IconGear, IconSearch, IconStories } from '@/components/icons';
+import { IconAvatar, IconChat, IconGear, IconPlus, IconQr, IconSearch, IconStories } from '@/components/icons';
+import { Toast } from '@/components/Toast';
 import { InstagramHost, INSTAGRAM_HOME_URL, INSTAGRAM_LOGOUT_URL, INSTAGRAM_ROOT_URL, type InstagramHostHandle } from '@/hosts/InstagramHost';
 import { LinkedInHost } from '@/hosts/LinkedInHost';
 import type { PageMessage } from '@/inject/protocol';
@@ -52,11 +53,23 @@ function initialUnread(): { instagram: number; linkedin: number } {
   };
 }
 
-const INSTAGRAM_TABS: BottomTab<InstagramTab>[] = [
+/** Post is an action, not a tab: it opens Instagram's own create flow in the
+ * current page and never becomes the active item. */
+type InstagramBarKey = InstagramTab | 'post';
+
+const INSTAGRAM_TABS: BottomTab<InstagramBarKey>[] = [
   { key: 'search', label: 'Search', icon: (color) => <IconSearch color={color} /> },
   { key: 'dms', label: 'DMs', icon: (color) => <IconChat color={color} /> },
+  { key: 'post', label: 'Post', icon: (color) => <IconPlus color={color} /> },
   { key: 'profile', label: 'Profile', icon: (color) => <IconAvatar color={color} /> },
 ];
+
+/** Calls the hook the Instagram inject script installs (src/inject/instagram.ts). */
+const CREATE_SCRIPT = 'window.__UNFEED_CREATE__ && window.__UNFEED_CREATE__()';
+
+/** Post flow: idle, waiting for the profile page after the current page had
+ * no New post control, or retried there once. */
+type PostAttempt = 'idle' | 'waiting' | 'retried';
 
 function pathOf(url: string): string | null {
   try {
@@ -86,6 +99,20 @@ function StoriesButton({ onPress, active }: { onPress: () => void; active: boole
   );
 }
 
+function QrButton({ onPress, active }: { onPress: () => void; active: boolean }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="QR"
+      accessibilityState={{ selected: active }}
+      style={styles.headerButton}
+    >
+      <IconQr color={active ? colors.silver : colors.muted} />
+    </TouchableOpacity>
+  );
+}
+
 function SettingsButton({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity
@@ -110,7 +137,16 @@ export default function Index() {
   // A scanned Instagram link (T4, charter 8.7) overrides the tab URL until a
   // bottom tab is pressed, like the stories override below.
   const [scannedUrl, setScannedUrl] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const hostRef = useRef<InstagramHostHandle | null>(null);
+  const postAttemptRef = useRef<PostAttempt>('idle');
+
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // Stored settings arrive a moment after launch: jump to the app Denis left
   // (charter section 6, lastApp). Hosts render once hydration settles, so the
@@ -154,6 +190,35 @@ export default function Index() {
       setActiveTab(tab);
     },
     [activeTab, settings.haptics, stories],
+  );
+
+  // Post (Denis, 15 Oct 2026): Instagram's own create flow, opened from the
+  // current page. A page without the control (a DM thread) moves to the
+  // profile tab and tries once more there.
+  const startPost = useCallback(() => {
+    tickHaptic(settings.haptics);
+    postAttemptRef.current = 'idle';
+    hostRef.current?.runScript(CREATE_SCRIPT);
+  }, [settings.haptics]);
+
+  const handleCreateMissing = useCallback(() => {
+    if (postAttemptRef.current === 'idle' && !(activeTab === 'profile' && !stories && !scannedUrl)) {
+      postAttemptRef.current = 'waiting';
+      setScannedUrl(null);
+      setStories(null);
+      setActiveTab('profile');
+      return;
+    }
+    postAttemptRef.current = 'idle';
+    setToast('Posting is not available on this page');
+  }, [activeTab, scannedUrl, stories]);
+
+  const selectBarItem = useCallback(
+    (key: InstagramBarKey) => {
+      if (key === 'post') startPost();
+      else selectTab(key);
+    },
+    [selectTab, startPost],
   );
 
   const openStories = useCallback(() => {
@@ -218,9 +283,18 @@ export default function Index() {
         handleUsernameDetected(message.value);
         return;
       }
+      if (message.type === 'ig-create-missing') {
+        handleCreateMissing();
+        return;
+      }
       if (message.type !== 'route') return;
       const path = pathOf(message.url);
       if (!path) return;
+      if (postAttemptRef.current === 'waiting') {
+        // The profile page is loading: give it a moment to render its header.
+        postAttemptRef.current = 'retried';
+        setTimeout(() => hostRef.current?.runScript(CREATE_SCRIPT), 1500);
+      }
       if (scannedUrl) {
         // Showing a scanned link (charter 8.7): tab URLs stay as they were, a
         // bottom tab press returns to them.
@@ -247,7 +321,7 @@ export default function Index() {
       }
       setTabUrls((prev) => (prev[activeTab] === message.url ? prev : { ...prev, [activeTab]: message.url }));
     },
-    [activeTab, handleUsernameDetected, scannedUrl, stories],
+    [activeTab, handleCreateMissing, handleUsernameDetected, scannedUrl, stories],
   );
 
   // Android back button (section 8.6): WebView back, then the default tab,
@@ -282,7 +356,13 @@ export default function Index() {
   return (
     <View style={styles.fill}>
       <Header
-        left={<StoriesButton onPress={openStories} active={stories !== null} />}
+        left={
+          activeApp === 'instagram' ? (
+            <StoriesButton onPress={openStories} active={stories !== null} />
+          ) : (
+            <QrButton onPress={() => setQrOpen((open) => !open)} active={qrOpen} />
+          )
+        }
         center={<AppSwitcher active={activeApp} unread={unread} onSelect={handleSelectApp} />}
         right={<SettingsButton onPress={() => router.push('/settings')} />}
       />
@@ -297,7 +377,8 @@ export default function Index() {
             scrollToTopSignal={scrollSignal}
           />
         ) : null}
-        <BottomBar tabs={INSTAGRAM_TABS} active={activeTab} onSelect={selectTab} />
+        <BottomBar<InstagramBarKey> tabs={INSTAGRAM_TABS} active={activeTab} onSelect={selectBarItem} />
+        <Toast message={toast} />
       </View>
       <View style={[styles.hostArea, activeApp !== 'linkedin' && styles.hidden]} testID="host-linkedin">
         {hydrated ? (
@@ -307,8 +388,11 @@ export default function Index() {
             haptics={settings.haptics}
             profileUrl={settings.liProfileUrl}
             logoutSignal={logout?.site === 'linkedin' ? logout.id : 0}
+            qrOpen={qrOpen}
+            onQrOpenChange={setQrOpen}
             onProfileVanityDetected={handleProfileVanityDetected}
             onOpenInstagramUrl={openInstagramUrl}
+            onOpenSettings={() => router.push('/settings')}
           />
         ) : null}
       </View>

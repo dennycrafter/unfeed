@@ -13,7 +13,8 @@ const MY_PROFILE_URL = 'https://www.linkedin.com/in/denis-popov/';
 async function openQrScreen(page: import('@playwright/test').Page, path = '/'): Promise<void> {
   await page.goto(path);
   await page.getByRole('tab', { name: 'LinkedIn' }).click();
-  await page.getByRole('tab', { name: 'QR tab' }).click();
+  // The QR panel opens from the header since 15 Oct 2026.
+  await page.getByRole('button', { name: 'QR' }).click();
 }
 
 test('scanner shows the camera permission explainer at phone size', async ({ page }) => {
@@ -30,10 +31,17 @@ test('scan result sheet at phone size and routing to the profile', async ({ page
   await expect(page.getByText(SCAN_PROFILE_URL)).toBeVisible();
   await page.screenshot({ path: join('docs', 'screenshots', 't4-qr-scan-result-sheet.png') });
 
-  // Open in LinkedIn routes the scanned profile to the Profile tab.
+  // Open in LinkedIn closes the panel and opens the scanned profile behind it.
   await page.getByRole('button', { name: 'Open in LinkedIn' }).click();
-  await expect(page.getByText('LinkedIn profile (web preview)')).toBeVisible();
+  await expect(page.getByText('LinkedIn (web preview)')).toBeVisible();
   await expect(page.getByText(SCAN_PROFILE_URL)).toBeVisible();
+});
+
+test('the QR panel closes from its Close button', async ({ page }) => {
+  await openQrScreen(page);
+  await expect(page.getByText('Scan a QR code')).toBeVisible();
+  await page.getByRole('button', { name: 'Close QR' }).click();
+  await expect(page.getByText('LinkedIn (web preview)')).toBeVisible();
 });
 
 test('my code empty state at phone size', async ({ page }) => {
@@ -41,6 +49,7 @@ test('my code empty state at phone size', async ({ page }) => {
   await page.getByRole('tab', { name: 'My code segment' }).click();
   await expect(page.getByText('No LinkedIn profile link saved yet.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Find my profile' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Or type it in Settings' })).toBeVisible();
   await page.screenshot({ path: join('docs', 'screenshots', 't4-qr-my-code-empty.png') });
 });
 
