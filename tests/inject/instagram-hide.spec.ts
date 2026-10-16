@@ -16,6 +16,7 @@ const FIXTURE_ROUTES: Record<string, string> = {
   '/explore/search/': 'instagram-search.html',
   '/p/abc123/': 'instagram-post.html',
   '/direct/inbox/': 'instagram-dm.html',
+  '/yourprofile/': 'instagram-profile.html',
 };
 
 type PageMessageRecord = Record<string, unknown>;
@@ -118,6 +119,35 @@ test('dm fixture: thread untouched, reels link and banner hidden', async ({ page
   await expect(page.locator('a[href="/reels/abc123/"]')).toBeHidden();
   await expect(page.locator('aside.hashed-app-banner')).toBeHidden();
   await waitForMessage(page, { type: 'unread', count: 2 });
+});
+
+test('profile fixture: the pinned nav bar without a nav element hides, the profile stays', async ({ page }) => {
+  await openFixture(page, '/yourprofile/');
+  await expect(page.locator('div.bar')).toBeHidden();
+  await expect(page.locator('main.profile')).toBeVisible();
+  await expect(page.locator('.profile-header')).toBeVisible();
+  await expect(page.locator('.profile-options')).toBeVisible();
+  // The profile's own Reels tab is content, not navigation.
+  await expect(page.locator('.profile-tab-reels')).toBeVisible();
+});
+
+test('profile fixture: the Use the app sheet hides', async ({ page }) => {
+  await openFixture(page, '/yourprofile/');
+  await expect(page.locator('div.app-sheet')).toBeHidden();
+  await expect(page.locator('.profile-username')).toBeVisible();
+});
+
+test('the Post hook presses the hidden New post control', async ({ page }) => {
+  await openFixture(page, '/yourprofile/');
+  await expect(page.locator('div.bar')).toBeHidden();
+  await page.evaluate(() => (window as unknown as { __UNFEED_CREATE__: () => void }).__UNFEED_CREATE__());
+  expect(await page.evaluate(() => (window as unknown as { __createPressed?: boolean }).__createPressed)).toBe(true);
+});
+
+test('the Post hook reports a page without a New post control', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/');
+  await page.evaluate(() => (window as unknown as { __UNFEED_CREATE__: () => void }).__UNFEED_CREATE__());
+  await waitForMessage(page, { type: 'ig-create-missing' });
 });
 
 test('route message is posted on pushState', async ({ page }) => {

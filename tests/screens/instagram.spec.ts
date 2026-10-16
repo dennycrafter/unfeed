@@ -9,9 +9,10 @@ import { join } from 'node:path';
 const screenshot = (name: string): string => join('docs', 'screenshots', name);
 
 test.describe('instagram screens at phone size', () => {
-  test('DMs tab opens the inbox', async ({ page }) => {
+  test('DMs tab opens the inbox, with the Post button in the bar', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByText('https://www.instagram.com/direct/inbox/')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Post tab' })).toBeVisible();
     await page.screenshot({ path: screenshot('t2-instagram-dms.png') });
   });
 

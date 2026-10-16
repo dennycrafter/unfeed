@@ -25,7 +25,12 @@
       "keepQuery": ["keywords"]
     },
     { "id": "li-6-invitation-manager", "match": { "kind": "prefix", "paths": ["/mynetwork/invitation-manager/"] }, "action": "allow" },
-    { "id": "li-7-mynetwork", "match": { "kind": "prefix", "paths": ["/mynetwork/"] }, "action": "redirect", "to": "/mynetwork/invitation-manager/" },
+    { "id": "li-7-mynetwork", "match": { "kind": "prefix", "paths": ["/mynetwork/"] }, "action": "allow" },
+    {
+      "id": "li-8-composer",
+      "match": { "kind": "prefix", "paths": ["/feed/"], "query": ["shareActive"] },
+      "action": "allow"
+    },
     {
       "id": "li-8-shared-post",
       "match": { "kind": "prefix", "paths": ["/feed/update/", "/posts/"] },
@@ -36,7 +41,7 @@
     { "id": "li-9-home", "match": { "kind": "home" }, "action": "redirect", "to": "/messaging/" },
     {
       "id": "li-10-distractions",
-      "match": { "kind": "prefix", "paths": ["/notifications/", "/news/", "/video/", "/learning/", "/games/"] },
+      "match": { "kind": "prefix", "paths": ["/news/", "/video/", "/learning/", "/games/"] },
       "action": "redirect",
       "to": "/messaging/"
     },

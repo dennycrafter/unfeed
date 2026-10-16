@@ -41,12 +41,16 @@ async function prepare(page: Page, settings?: { allowSharedPosts?: boolean; hide
   await page.addInitScript(LINKEDIN_INJECT_SCRIPT);
 }
 
-test('messaging fixture: global nav hides, the thread survives, routes and unread report', async ({ page }) => {
+test('messaging fixture: the bar stays without Home, the thread survives, routes and unread report', async ({ page }) => {
   await routeFixture(page, 'linkedin-messaging.html');
   await prepare(page);
   await page.goto('https://www.linkedin.com/messaging/');
 
-  await expect(page.locator('header[role="banner"]')).toBeHidden();
+  // LinkedIn's own bar stays (Denis, 15 Oct 2026); only the way to the feed goes.
+  await expect(page.locator('header[role="banner"]')).toBeVisible();
+  await expect(page.locator('a[href="/feed/"]')).toBeHidden();
+  await expect(page.locator('a[href="/mynetwork/"]')).toBeVisible();
+  await expect(page.locator('a[href="/notifications/"]')).toBeVisible();
   await expect(page.locator('.app-install-banner')).toBeHidden();
   await expect(page.getByText('Hey, are we still on for Thursday?')).toBeVisible();
   await expect(page.locator('main.messaging-thread')).toBeVisible();
@@ -111,6 +115,40 @@ test('profile fixture: activity and suggestions hide, identity and upsells behav
   await expect(page.locator('.profile-headline')).toBeVisible();
   // hideCounts defaults to false, so the count stays until the setting is on.
   await expect(page.locator('.connection-count')).toBeVisible();
+});
+
+test('own profile fixture: the vanity is read from the edit links while on /in/me/', async ({ page }) => {
+  await routeFixture(page, 'linkedin-own-profile.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/in/me/');
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __unfeedMessages: Array<{ type: string; url?: string }> }).__unfeedMessages),
+    )
+    .toContainEqual({ type: 'li-own-profile', url: 'https://www.linkedin.com/in/ada-lovelace-1815/' });
+});
+
+test('own profile fixture: the bar Home button hides, a page tab called Home stays', async ({ page }) => {
+  await routeFixture(page, 'linkedin-own-profile.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/in/me/');
+
+  await expect(page.locator('.bar-home')).toBeHidden();
+  await expect(page.locator('.bar-network')).toBeVisible();
+  await expect(page.locator('.company-tabs .tab')).toBeVisible();
+});
+
+test('profile fixture: someone else is never reported as the own profile', async ({ page }) => {
+  await routeFixture(page, 'linkedin-profile.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/in/someone/');
+  await expect(page.locator('h1.profile-name')).toBeVisible();
+
+  const messages = await page.evaluate(
+    () => (window as unknown as { __unfeedMessages: Array<{ type: string }> }).__unfeedMessages,
+  );
+  expect(messages.some((message) => message.type === 'li-own-profile')).toBe(false);
 });
 
 test('profile fixture: hide counts setting removes the connection count', async ({ page }) => {

@@ -16,6 +16,7 @@ jest.mock('expo-haptics', () => ({
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() },
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock('expo-linking', () => ({
@@ -38,6 +39,8 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+const mockInjectJavaScript = jest.fn();
+
 jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -48,7 +51,7 @@ jest.mock('react-native-webview', () => {
       clearCache: () => undefined,
       reload: () => undefined,
       scrollTo: () => undefined,
-      injectJavaScript: () => undefined,
+      injectJavaScript: (code: string) => mockInjectJavaScript(props.testID, code),
       stopLoading: () => undefined,
     }));
     return <View testID={props.testID} />;
@@ -134,6 +137,39 @@ test('the next launch opens the app that was last used', async () => {
   const { getByTestId } = render(<Shell />);
   expect(isHidden(getByTestId('host-instagram', anyVisibility))).toBe(true);
   expect(isHidden(getByTestId('host-linkedin', anyVisibility))).toBe(false);
+});
+
+test('the Instagram Post button opens the create flow in the page, not a tab', async () => {
+  await hydrateSettings();
+  mockInjectJavaScript.mockClear();
+  const { getByLabelText } = render(<Shell />);
+  fireEvent.press(getByLabelText('Post tab'));
+  expect(mockInjectJavaScript).toHaveBeenCalledWith('webview-instagram', expect.stringContaining('__UNFEED_CREATE__'));
+  // DMs stays the active tab: Post is an action.
+  expect(getByLabelText('DMs tab').props.accessibilityState).toEqual({ selected: true });
+});
+
+test('the header left button is Stories on Instagram and QR on LinkedIn', async () => {
+  await hydrateSettings();
+  const { getByLabelText, queryByLabelText } = render(<Shell />);
+  expect(getByLabelText('Stories')).toBeTruthy();
+  expect(queryByLabelText('QR')).toBeNull();
+
+  fireEvent.press(getByLabelText('LinkedIn'));
+  expect(getByLabelText('QR')).toBeTruthy();
+  expect(queryByLabelText('Stories')).toBeNull();
+});
+
+test('LinkedIn has no Unfeed bottom bar, and the QR panel opens and closes', async () => {
+  await hydrateSettings();
+  const { getByLabelText, queryByLabelText } = render(<Shell />);
+  fireEvent.press(getByLabelText('LinkedIn'));
+  expect(queryByLabelText('Messages tab')).toBeNull();
+
+  fireEvent.press(getByLabelText('QR'));
+  await waitFor(() => expect(getByLabelText('Close QR')).toBeTruthy());
+  fireEvent.press(getByLabelText('Close QR'));
+  await waitFor(() => expect(queryByLabelText('Close QR')).toBeNull());
 });
 
 test('haptics follow the settings toggle', async () => {

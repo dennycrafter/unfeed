@@ -3,13 +3,11 @@
    used; fixtures in tests/fixtures carry random hashed classes to prove it.
    Text-only targets are hidden by the sweeps in src/inject/linkedin.ts. */
 
-/* LinkedIn's own chrome: the top bar and the bottom nav are the containers
-   that link to the feed or the network pages. Unfeed ships native ones. The
-   header hides whenever it carries those links, wherever they nest. */
-header:has(a[href^="/feed/"]),
-header:has(a[href^="/mynetwork/"]),
-nav:has(a[href^="/feed/"]),
-nav:has(a[href^="/mynetwork/"]) {
+/* LinkedIn's own top and bottom bars stay (Denis, 15 Oct 2026). Only the
+   ways into the feed go: the Home item and any other link to /feed/. Shared
+   posts (/feed/update/) and the post composer (shareActive) are not feed. */
+a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]),
+a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]) {
   display: none !important;
 }
 

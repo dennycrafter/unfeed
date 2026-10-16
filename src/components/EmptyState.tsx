@@ -8,10 +8,13 @@ interface EmptyStateProps {
   message: string;
   actionLabel?: string;
   onAction?: () => void;
+  /** An optional quiet text button under the main one. */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
   style?: ViewProps['style'];
 }
 
-export function EmptyState({ message, actionLabel, onAction, style }: EmptyStateProps) {
+export function EmptyState({ message, actionLabel, onAction, secondaryLabel, onSecondary, style }: EmptyStateProps) {
   return (
     <View style={[styles.wrap, style]}>
       <Text style={styles.message}>{message}</Text>
@@ -23,6 +26,11 @@ export function EmptyState({ message, actionLabel, onAction, style }: EmptyState
           accessibilityLabel={actionLabel}
         >
           <Text style={styles.buttonText}>{actionLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {secondaryLabel && onSecondary ? (
+        <TouchableOpacity onPress={onSecondary} accessibilityRole="button" accessibilityLabel={secondaryLabel}>
+          <Text style={styles.secondaryText}>{secondaryLabel}</Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -40,4 +48,5 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   buttonText: { color: colors.silver, fontSize: 13 },
+  secondaryText: { color: colors.muted, fontSize: 13, paddingVertical: 4 },
 });

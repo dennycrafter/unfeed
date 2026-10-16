@@ -110,9 +110,70 @@ const hideCountTexts: HideSweep = (settings) => {
   }
 };
 
+/** The bottom bar's Home item, in case it is a button rather than a /feed/
+ * link: a short control whose whole text is Home. */
+function inSiteBar(element: Element): boolean {
+  let node: Element | null = element;
+  for (let hop = 0; node !== null && hop < 8; hop += 1) {
+    if (['NAV', 'HEADER', 'FOOTER'].includes(node.tagName) || node.getAttribute('role') === 'navigation') return true;
+    const position = getComputedStyle(node).position;
+    if (position === 'fixed' || position === 'sticky') return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
+const hideHomeItem: HideSweep = () => {
+  for (const item of document.querySelectorAll('a, button, [role="link"], [role="button"], [role="tab"]')) {
+    if (isHidden(item)) continue;
+    if ((item.textContent ?? '').trim().toLowerCase() !== 'home') continue;
+    // A company page has its own Home tab in the page body; only bars count.
+    if (inSiteBar(item)) hide(item);
+  }
+};
+
+/** The post composer can open on /feed/ (shareActive). The feed behind it
+ * goes: every update card carries a stable activity or share urn. */
+const hideFeedBehindComposer: HideSweep = () => {
+  if (!location.pathname.toLowerCase().startsWith('/feed')) return;
+  hideAllMatching(
+    document,
+    '[data-urn^="urn:li:activity"], [data-urn^="urn:li:share"], [data-urn^="urn:li:ugcPost"], [data-id^="urn:li:activity"]',
+  );
+};
+
+/** LinkedIn shows the own profile at /in/me/ without moving to the vanity
+ * URL (checked 15 Oct 2026), so the QR code cannot wait for a route. Only
+ * the own profile carries edit links, and they hold the vanity. */
+const OWN_PROFILE_EDIT = /\/in\/([^/?#]+)\/edit\//;
+
+const detectOwnProfile: HideSweep = (_settings, post) => {
+  if (!isOnProfilePage()) return;
+  const scope = globalThis as { __UNFEED_LI__?: { postedProfile?: string } };
+  const state = (scope.__UNFEED_LI__ = scope.__UNFEED_LI__ ?? {});
+  for (const anchor of document.querySelectorAll('a[href*="/in/"][href*="/edit/"]')) {
+    const match = OWN_PROFILE_EDIT.exec(anchor.getAttribute('href') ?? '');
+    const vanity = match?.[1]?.toLowerCase();
+    if (!vanity || vanity === 'me') continue;
+    const url = `https://www.linkedin.com/in/${vanity}/`;
+    if (state.postedProfile === url) return;
+    state.postedProfile = url;
+    post({ type: 'li-own-profile', url });
+    return;
+  }
+};
+
 setupInject('linkedin', {
   css: linkedinCss,
-  sweeps: [hideSearchPosts, hideProfileSuggestions, hideBannersAndUpsells, hideCountTexts],
+  sweeps: [
+    hideSearchPosts,
+    hideProfileSuggestions,
+    hideBannersAndUpsells,
+    hideCountTexts,
+    hideHomeItem,
+    hideFeedBehindComposer,
+    detectOwnProfile,
+  ],
   unread: true,
   enforce: true,
 });

@@ -44,4 +44,7 @@ export interface WebViewHostApi {
   /** Drops the cached page data, part of the log out flow (charter 8.8).
    * No web preview effect: there is no real cache there. */
   clearCache(): void;
+  /** Runs a snippet in the page, for example the Instagram Post hook. No
+   * web preview effect: there is no real page there. */
+  runScript(code: string): void;
 }

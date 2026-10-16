@@ -6,10 +6,10 @@ Instagram and LinkedIn with no feed. Unfeed opens the real mobile websites of In
 
 One app, two services, no feeds:
 
-- Instagram: opens straight to your DMs. Search, profiles and stories stay. The home feed, the reels feed and the explore grid are blocked and hidden.
-- LinkedIn: opens straight to Messages. People search, profiles and your QR code stay. The feed and post results are blocked and hidden.
+- Instagram: opens straight to your DMs. Unfeed's own bar has Search, DMs, Post and Profile; Instagram's own bars and "get the app" banners are hidden. Stories stay. The home feed, the reels feed and the explore grid are blocked and hidden.
+- LinkedIn: opens straight to Messages. LinkedIn's own top and bottom bars stay (search, messaging, My Network, Post, Notifications, Jobs) with Home removed. The feed and post search results are blocked and hidden.
 - A switcher at the top moves between the two, and both stay logged in and keep their place.
-- A QR tab on the LinkedIn side scans other people's codes and shows yours.
+- On LinkedIn, the QR button at the top left scans other people's codes and shows yours.
 
 The app is an Expo (React Native) app that shows the official Instagram and LinkedIn mobile websites inside web views. Every navigation is checked against a list of rules before it loads. Rules and hiding styles live in one place in the code and are shared by the app and the browser scripts below.
 
@@ -83,7 +83,7 @@ The phone app (Expo Go) is the main way to use Unfeed. The userscripts are the b
 - No push notifications. Instagram and LinkedIn only send those through their official apps or their private APIs, which Unfeed does not touch.
 - Some media may not work on the websites: voice notes, some video calls and some story uploads behave differently on the mobile websites than in the apps.
 - The sites can change their pages at any time. When they do, hiding or redirecting can break until the rules in this repo are updated. The QR screen and messages keep working even then.
-- Posting, reels and stories you create are not part of Unfeed. The sites may still allow them if you reach them, but Unfeed adds no buttons for them.
+- Posting on Instagram goes through Instagram's own create screen: the Post button opens it. Stories are added from the Stories button (Your story). Posting on LinkedIn uses LinkedIn's own Post button.
 
 ## Troubleshooting
 
@@ -116,8 +116,8 @@ If you changed anything in src/rules, src/inject or the CSS, run npm run build:i
 ```
 Phone (Expo Go)
  app shell (React Native, expo router)
-  top header: the Instagram / LinkedIn switcher, settings gear
-  bottom bars: one per service, native
+  top header: Stories (Instagram) or QR (LinkedIn), the switcher, settings gear
+  bottom bar: Instagram only (Search, DMs, Post, Profile); LinkedIn uses its own
   Instagram host: one web view on instagram.com, never unloaded
   LinkedIn host: one web view on linkedin.com, never unloaded
   QR screen: camera scanner and your code

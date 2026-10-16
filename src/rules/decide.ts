@@ -31,6 +31,9 @@ interface RuleMatch {
   paths?: string[];
   prefixes?: string[];
   context?: string;
+  /** Query keys that must all be present, for example LinkedIn's
+   * shareActive composer on /feed/. */
+  query?: string[];
 }
 
 interface RouteRule {
@@ -84,7 +87,9 @@ function hostMatches(host: string, pattern: string): boolean {
   return host === pattern || host.endsWith(`.${pattern}`);
 }
 
-function ruleMatches(rule: RouteRule, path: string, context: string): boolean {
+function ruleMatches(rule: RouteRule, path: string, context: string, url: URL): boolean {
+  const query = rule.match.query;
+  if (query && !query.every((key) => url.searchParams.has(key))) return false;
   switch (rule.match.kind) {
     case 'prefix':
       return (rule.match.paths ?? []).some((prefix) => path.startsWith(prefix));
@@ -149,6 +154,7 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
     if (match.context !== undefined && typeof match.context !== 'string') {
       fail(site, `rule ${id} context must be a string`);
     }
+    if (match.query !== undefined && !isStringArray(match.query)) fail(site, `rule ${id} query must be strings`);
     if (typeof record.action !== 'string' || !RULE_ACTIONS.includes(record.action as RuleAction)) {
       fail(site, `rule ${id} has unknown action "${String(record.action)}"`);
     }
@@ -167,7 +173,13 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
     }
     return {
       id,
-      match: { kind: match.kind as MatchKind, paths: match.paths, prefixes: match.prefixes, context: match.context },
+      match: {
+        kind: match.kind as MatchKind,
+        paths: match.paths,
+        prefixes: match.prefixes,
+        context: match.context,
+        query: match.query,
+      },
       action,
       to,
       keepQuery,
@@ -244,7 +256,7 @@ export function decide(site: Site, rawUrl: string, context: string, settings: De
     return { action: 'external', rule: 'outside-host' };
   }
   for (const rule of rules.rules) {
-    if (!ruleMatches(rule, path, context)) continue;
+    if (!ruleMatches(rule, path, context, url)) continue;
     if (rule.action === 'allow') return { action: 'allow', rule: rule.id };
     if (rule.action === 'redirect') return redirectWithQuery(rule, url);
     return settings.allowSharedPosts

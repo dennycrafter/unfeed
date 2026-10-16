@@ -54,6 +54,11 @@ a[href^="instagram://"] {
   display: none !important;
 }
 
+/* @unfeed-rule ig-swept -- anything a sweep in src/inject/instagram.ts decided to hide (own bars, app banners) */
+[data-unfeed-hidden] {
+  display: none !important;
+}
+
 /* @unfeed-rule ig-counts scope=counts -- like, view and follower counts, only when the hideCounts setting is on */
 a[href$="/liked-by/"],
 a[href$="/followers/"],

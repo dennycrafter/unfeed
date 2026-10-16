@@ -91,7 +91,8 @@ test('linkedin userscript: the home feed bounces to Messages with no native side
 
 test('linkedin userscript: messaging fixture matches the in app results', async ({ page }) => {
   await openFixture(page, 'linkedin', 'www.linkedin.com', '/messaging/', LINKEDIN_ROUTES);
-  await expect(page.locator('header[role="banner"]')).toBeHidden();
+  await expect(page.locator('header[role="banner"]')).toBeVisible();
+  await expect(page.locator('a[href="/feed/"]')).toBeHidden();
   await expect(page.locator('.app-install-banner')).toBeHidden();
   await expect(page.getByText('Hey, are we still on for Thursday?')).toBeVisible();
   await expect(page.locator('main.messaging-thread')).toBeVisible();

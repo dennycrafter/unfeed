@@ -48,6 +48,16 @@ export function IconQr({ color = colors.muted, size = 24 }: IconProps) {
   );
 }
 
+/** The Post button: a plus inside a rounded square. */
+export function IconPlus({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="4" y="4" width="16" height="16" rx="4" stroke={color} strokeWidth="1.8" />
+      <Path d="M12 8.5v7M8.5 12h7" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** The stories ring button: a plain round ring with a small inner dot. */
 export function IconStories({ color = colors.muted, size = 24 }: IconProps) {
   return (

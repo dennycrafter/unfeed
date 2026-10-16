@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed Instagram
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.0.0
+// @version 1.1.0
 // @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
 // @match https://instagram.com/*
 // @match https://www.instagram.com/*
@@ -14,68 +14,73 @@
 "use strict";
 (() => {
   // src/inject/css/instagram.css
-  var instagram_default = `/*
-  Unfeed hide rules for Instagram (charter section 8.4).
-
-  Every selector uses stable hooks only: href, aria-label, role and element
-  structure. Instagram rotates hashed class names weekly, so they are never
-  referenced here; the fixtures carry fake hashed classes to prove it.
-
-  Rules are named with marker comments parsed by src/inject/cssRules.ts:
-      @unfeed-rule <id> [scope=token,tokens] -- Title
-  Scope tokens come from src/inject/scopes.ts. A rule with no scope always
-  applies. The counts scope applies only while the hideCounts setting is on.
-*/
-
-/* @unfeed-rule ig-own-nav -- Instagram's own bottom navigation and top header, replaced by the native bars */
-nav:has(a[href="/explore/"]),
-nav:has(a[href="/reels/"]),
-header:has(svg[aria-label="Instagram"]),
-a[href="/"]:has(svg[aria-label="Instagram"]) {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */
-a[href^="/reels/"],
-a[href^="/explore/"] {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-explore-grid scope=explore-search -- the image grid below the search input */
-main a[href^="/p/"],
-main a[href^="/reel/"],
-main a[href^="/tv/"] {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */
-main > :not(:first-child),
-article,
-section:has(a[href^="/explore/people/"]),
-div:has(> a[href^="/explore/people/"]) {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-post-related scope=post-page -- More posts from, Suggested and related sections on permalinks */
-main > :not(:first-child),
-section:has(a[href^="/explore/people/"]) {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-app-banners -- Open app and Use the app banners */
-:is(div, aside, section, header):has(> a[href^="instagram://"]),
-:is(div, aside, section, header):has(> a[href^="https://apps.apple.com"]),
-:is(div, aside, section, header):has(> a[href^="https://play.google.com"]),
-a[href^="instagram://"] {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-counts scope=counts -- like, view and follower counts, only when the hideCounts setting is on */
-a[href$="/liked-by/"],
-a[href$="/followers/"],
-a[href$="/following/"] {
-  visibility: hidden !important;
-}
+  var instagram_default = `/*\r
+  Unfeed hide rules for Instagram (charter section 8.4).\r
+\r
+  Every selector uses stable hooks only: href, aria-label, role and element\r
+  structure. Instagram rotates hashed class names weekly, so they are never\r
+  referenced here; the fixtures carry fake hashed classes to prove it.\r
+\r
+  Rules are named with marker comments parsed by src/inject/cssRules.ts:\r
+      @unfeed-rule <id> [scope=token,tokens] -- Title\r
+  Scope tokens come from src/inject/scopes.ts. A rule with no scope always\r
+  applies. The counts scope applies only while the hideCounts setting is on.\r
+*/\r
+\r
+/* @unfeed-rule ig-own-nav -- Instagram's own bottom navigation and top header, replaced by the native bars */\r
+nav:has(a[href="/explore/"]),\r
+nav:has(a[href="/reels/"]),\r
+header:has(svg[aria-label="Instagram"]),\r
+a[href="/"]:has(svg[aria-label="Instagram"]) {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */\r
+a[href^="/reels/"],\r
+a[href^="/explore/"] {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-explore-grid scope=explore-search -- the image grid below the search input */\r
+main a[href^="/p/"],\r
+main a[href^="/reel/"],\r
+main a[href^="/tv/"] {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */\r
+main > :not(:first-child),\r
+article,\r
+section:has(a[href^="/explore/people/"]),\r
+div:has(> a[href^="/explore/people/"]) {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-post-related scope=post-page -- More posts from, Suggested and related sections on permalinks */\r
+main > :not(:first-child),\r
+section:has(a[href^="/explore/people/"]) {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-app-banners -- Open app and Use the app banners */\r
+:is(div, aside, section, header):has(> a[href^="instagram://"]),\r
+:is(div, aside, section, header):has(> a[href^="https://apps.apple.com"]),\r
+:is(div, aside, section, header):has(> a[href^="https://play.google.com"]),\r
+a[href^="instagram://"] {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-swept -- anything a sweep in src/inject/instagram.ts decided to hide (own bars, app banners) */\r
+[data-unfeed-hidden] {\r
+  display: none !important;\r
+}\r
+\r
+/* @unfeed-rule ig-counts scope=counts -- like, view and follower counts, only when the hideCounts setting is on */\r
+a[href$="/liked-by/"],\r
+a[href$="/followers/"],\r
+a[href$="/following/"] {\r
+  visibility: hidden !important;\r
+}\r
 `;
 
   // src/inject/cssRules.ts
@@ -203,7 +208,12 @@ a[href$="/following/"] {
         keepQuery: ["keywords"]
       },
       { id: "li-6-invitation-manager", match: { kind: "prefix", paths: ["/mynetwork/invitation-manager/"] }, action: "allow" },
-      { id: "li-7-mynetwork", match: { kind: "prefix", paths: ["/mynetwork/"] }, action: "redirect", to: "/mynetwork/invitation-manager/" },
+      { id: "li-7-mynetwork", match: { kind: "prefix", paths: ["/mynetwork/"] }, action: "allow" },
+      {
+        id: "li-8-composer",
+        match: { kind: "prefix", paths: ["/feed/"], query: ["shareActive"] },
+        action: "allow"
+      },
       {
         id: "li-8-shared-post",
         match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
@@ -214,7 +224,7 @@ a[href$="/following/"] {
       { id: "li-9-home", match: { kind: "home" }, action: "redirect", to: "/messaging/" },
       {
         id: "li-10-distractions",
-        match: { kind: "prefix", paths: ["/notifications/", "/news/", "/video/", "/learning/", "/games/"] },
+        match: { kind: "prefix", paths: ["/news/", "/video/", "/learning/", "/games/"] },
         action: "redirect",
         to: "/messaging/"
       },
@@ -246,8 +256,10 @@ a[href$="/following/"] {
   function hostMatches(host, pattern) {
     return host === pattern || host.endsWith(`.${pattern}`);
   }
-  function ruleMatches(rule, path, context) {
+  function ruleMatches(rule, path, context, url) {
     var _a, _b, _c;
+    const query = rule.match.query;
+    if (query && !query.every((key) => url.searchParams.has(key))) return false;
     switch (rule.match.kind) {
       case "prefix":
         return ((_a = rule.match.paths) != null ? _a : []).some((prefix) => path.startsWith(prefix));
@@ -306,6 +318,7 @@ a[href$="/following/"] {
       if (match.context !== void 0 && typeof match.context !== "string") {
         fail(site, `rule ${id} context must be a string`);
       }
+      if (match.query !== void 0 && !isStringArray(match.query)) fail(site, `rule ${id} query must be strings`);
       if (typeof record.action !== "string" || !RULE_ACTIONS.includes(record.action)) {
         fail(site, `rule ${id} has unknown action "${String(record.action)}"`);
       }
@@ -324,7 +337,13 @@ a[href$="/following/"] {
       }
       return {
         id,
-        match: { kind: match.kind, paths: match.paths, prefixes: match.prefixes, context: match.context },
+        match: {
+          kind: match.kind,
+          paths: match.paths,
+          prefixes: match.prefixes,
+          context: match.context,
+          query: match.query
+        },
         action,
         to,
         keepQuery
@@ -385,7 +404,7 @@ a[href$="/following/"] {
       return { action: "external", rule: "outside-host" };
     }
     for (const rule of rules2.rules) {
-      if (!ruleMatches(rule, path, context)) continue;
+      if (!ruleMatches(rule, path, context, url)) continue;
       if (rule.action === "allow") return { action: "allow", rule: rule.id };
       if (rule.action === "redirect") return redirectWithQuery(rule, url);
       return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url);
@@ -648,8 +667,103 @@ a[href$="/following/"] {
       return;
     }
   };
+  var HIDDEN_ATTR = "data-unfeed-hidden";
+  function hide(element) {
+    if (element.getAttribute(HIDDEN_ATTR) === null) element.setAttribute(HIDDEN_ATTR, "");
+  }
+  var NAV_ICON_LABELS = /* @__PURE__ */ new Set([
+    "Home",
+    "Reels",
+    "Explore",
+    "Search",
+    "Messages",
+    "Direct",
+    "Notifications",
+    "Activity Feed",
+    "Instagram",
+    "Threads"
+  ]);
+  function navLabel(anchor) {
+    for (const svg of anchor.querySelectorAll("svg[aria-label]")) {
+      const label = svg.getAttribute("aria-label");
+      if (label && NAV_ICON_LABELS.has(label)) return label;
+    }
+    return null;
+  }
+  var PAGE_CONTENT = 'main, [role="main"], [role="dialog"], textarea';
+  function holdsPageContent(element) {
+    if (element === document.body || element === document.documentElement) return true;
+    return element.matches(PAGE_CONTENT) || element.querySelector(PAGE_CONTENT) !== null;
+  }
+  function isPinned(element) {
+    const position = getComputedStyle(element).position;
+    return position === "fixed" || position === "sticky";
+  }
+  function navLinkCount(container) {
+    let count = 0;
+    for (const anchor of container.querySelectorAll("a[href]")) {
+      if (navLabel(anchor)) count += 1;
+    }
+    return count;
+  }
+  function navBarFor(anchor) {
+    let candidate = null;
+    let node = anchor.parentElement;
+    for (let hop = 0; node !== null && hop < 16; hop += 1) {
+      if (holdsPageContent(node)) break;
+      if (isPinned(node)) return node;
+      candidate = node;
+      node = node.parentElement;
+    }
+    if (candidate === null || anchor.closest('main, [role="main"]')) return null;
+    const barSized = candidate.getBoundingClientRect().height <= window.innerHeight * 0.3;
+    return barSized && navLinkCount(candidate) >= 2 ? candidate : null;
+  }
+  var hideOwnNav = () => {
+    for (const anchor of document.querySelectorAll("a[href]")) {
+      if (anchor.closest(`[${HIDDEN_ATTR}], [role="dialog"]`)) continue;
+      if (!navLabel(anchor)) continue;
+      const bar = navBarFor(anchor);
+      if (bar) hide(bar);
+    }
+  };
+  var OPEN_APP_PATTERN = /^(get the app|open app|open the app|use the app|open instagram|get instagram|download the app|switch to the app)$/i;
+  function hideTightContainer(trigger) {
+    var _a;
+    let target = trigger;
+    let node = trigger.parentElement;
+    for (let hop = 0; node !== null && hop < 6; hop += 1) {
+      if (holdsPageContent(node) || ((_a = node.textContent) != null ? _a : "").trim().length > 160) break;
+      target = node;
+      if (isPinned(node)) break;
+      node = node.parentElement;
+    }
+    hide(target);
+  }
+  var hideAppBanners = () => {
+    var _a;
+    for (const trigger of document.querySelectorAll('a, button, [role="button"]')) {
+      if (trigger.closest(`[${HIDDEN_ATTR}]`)) continue;
+      if (OPEN_APP_PATTERN.test(((_a = trigger.textContent) != null ? _a : "").trim())) hideTightContainer(trigger);
+    }
+  };
+  function installCreateHook() {
+    const scope = globalThis;
+    const post = createPoster("instagram");
+    scope.__UNFEED_CREATE__ = () => {
+      for (const svg of document.querySelectorAll('svg[aria-label="New post"], svg[aria-label="Create"]')) {
+        const control = svg.closest('a, button, [role="link"], [role="button"]');
+        if (control instanceof HTMLElement) {
+          control.click();
+          return;
+        }
+      }
+      post({ type: "ig-create-missing" });
+    };
+  }
+  installCreateHook();
   setupInject("instagram", {
-    sweeps: [applyNamedRules, detectUsername],
+    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners],
     unread: true,
     enforce: true
   });
