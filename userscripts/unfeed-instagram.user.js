@@ -14,73 +14,73 @@
 "use strict";
 (() => {
   // src/inject/css/instagram.css
-  var instagram_default = `/*\r
-  Unfeed hide rules for Instagram (charter section 8.4).\r
-\r
-  Every selector uses stable hooks only: href, aria-label, role and element\r
-  structure. Instagram rotates hashed class names weekly, so they are never\r
-  referenced here; the fixtures carry fake hashed classes to prove it.\r
-\r
-  Rules are named with marker comments parsed by src/inject/cssRules.ts:\r
-      @unfeed-rule <id> [scope=token,tokens] -- Title\r
-  Scope tokens come from src/inject/scopes.ts. A rule with no scope always\r
-  applies. The counts scope applies only while the hideCounts setting is on.\r
-*/\r
-\r
-/* @unfeed-rule ig-own-nav -- Instagram's own bottom navigation and top header, replaced by the native bars */\r
-nav:has(a[href="/explore/"]),\r
-nav:has(a[href="/reels/"]),\r
-header:has(svg[aria-label="Instagram"]),\r
-a[href="/"]:has(svg[aria-label="Instagram"]) {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */\r
-a[href^="/reels/"],\r
-a[href^="/explore/"] {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-explore-grid scope=explore-search -- the image grid below the search input */\r
-main a[href^="/p/"],\r
-main a[href^="/reel/"],\r
-main a[href^="/tv/"] {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */\r
-main > :not(:first-child),\r
-article,\r
-section:has(a[href^="/explore/people/"]),\r
-div:has(> a[href^="/explore/people/"]) {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-post-related scope=post-page -- More posts from, Suggested and related sections on permalinks */\r
-main > :not(:first-child),\r
-section:has(a[href^="/explore/people/"]) {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-app-banners -- Open app and Use the app banners */\r
-:is(div, aside, section, header):has(> a[href^="instagram://"]),\r
-:is(div, aside, section, header):has(> a[href^="https://apps.apple.com"]),\r
-:is(div, aside, section, header):has(> a[href^="https://play.google.com"]),\r
-a[href^="instagram://"] {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-swept -- anything a sweep in src/inject/instagram.ts decided to hide (own bars, app banners) */\r
-[data-unfeed-hidden] {\r
-  display: none !important;\r
-}\r
-\r
-/* @unfeed-rule ig-counts scope=counts -- like, view and follower counts, only when the hideCounts setting is on */\r
-a[href$="/liked-by/"],\r
-a[href$="/followers/"],\r
-a[href$="/following/"] {\r
-  visibility: hidden !important;\r
-}\r
+  var instagram_default = `/*
+  Unfeed hide rules for Instagram (charter section 8.4).
+
+  Every selector uses stable hooks only: href, aria-label, role and element
+  structure. Instagram rotates hashed class names weekly, so they are never
+  referenced here; the fixtures carry fake hashed classes to prove it.
+
+  Rules are named with marker comments parsed by src/inject/cssRules.ts:
+      @unfeed-rule <id> [scope=token,tokens] -- Title
+  Scope tokens come from src/inject/scopes.ts. A rule with no scope always
+  applies. The counts scope applies only while the hideCounts setting is on.
+*/
+
+/* @unfeed-rule ig-own-nav -- Instagram's own bottom navigation and top header, replaced by the native bars */
+nav:has(a[href="/explore/"]),
+nav:has(a[href="/reels/"]),
+header:has(svg[aria-label="Instagram"]),
+a[href="/"]:has(svg[aria-label="Instagram"]) {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */
+a[href^="/reels/"],
+a[href^="/explore/"] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-explore-grid scope=explore-search -- the image grid below the search input */
+main a[href^="/p/"],
+main a[href^="/reel/"],
+main a[href^="/tv/"] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */
+main > :not(:first-child),
+article,
+section:has(a[href^="/explore/people/"]),
+div:has(> a[href^="/explore/people/"]) {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-post-related scope=post-page -- More posts from, Suggested and related sections on permalinks */
+main > :not(:first-child),
+section:has(a[href^="/explore/people/"]) {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-app-banners -- Open app and Use the app banners */
+:is(div, aside, section, header):has(> a[href^="instagram://"]),
+:is(div, aside, section, header):has(> a[href^="https://apps.apple.com"]),
+:is(div, aside, section, header):has(> a[href^="https://play.google.com"]),
+a[href^="instagram://"] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-swept -- anything a sweep in src/inject/instagram.ts decided to hide (own bars, app banners) */
+[data-unfeed-hidden] {
+  display: none !important;
+}
+
+/* @unfeed-rule ig-counts scope=counts -- like, view and follower counts, only when the hideCounts setting is on */
+a[href$="/liked-by/"],
+a[href$="/followers/"],
+a[href$="/following/"] {
+  visibility: hidden !important;
+}
 `;
 
   // src/inject/cssRules.ts

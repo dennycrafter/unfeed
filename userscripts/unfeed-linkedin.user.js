@@ -13,23 +13,23 @@
 "use strict";
 (() => {
   // src/inject/css/linkedin.css
-  var linkedin_default = `/* Unfeed hide rules for LinkedIn (charter section 8.4). Stable hooks only:\r
-   hrefs, roles, aria labels and structure. Hashed class names are never\r
-   used; fixtures in tests/fixtures carry random hashed classes to prove it.\r
-   Text-only targets are hidden by the sweeps in src/inject/linkedin.ts. */\r
-\r
-/* LinkedIn's own top and bottom bars stay (Denis, 15 Oct 2026). Only the\r
-   ways into the feed go: the Home item and any other link to /feed/. Shared\r
-   posts (/feed/update/) and the post composer (shareActive) are not feed. */\r
-a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]),\r
-a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]) {\r
-  display: none !important;\r
-}\r
-\r
-/* Anything a sweep decided to hide stays hidden even when the page moves it. */\r
-[data-unfeed-hidden] {\r
-  display: none !important;\r
-}\r
+  var linkedin_default = `/* Unfeed hide rules for LinkedIn (charter section 8.4). Stable hooks only:
+   hrefs, roles, aria labels and structure. Hashed class names are never
+   used; fixtures in tests/fixtures carry random hashed classes to prove it.
+   Text-only targets are hidden by the sweeps in src/inject/linkedin.ts. */
+
+/* LinkedIn's own top and bottom bars stay (Denis, 15 Oct 2026). Only the
+   ways into the feed go: the Home item and any other link to /feed/. Shared
+   posts (/feed/update/) and the post composer (shareActive) are not feed. */
+a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]),
+a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]) {
+  display: none !important;
+}
+
+/* Anything a sweep decided to hide stays hidden even when the page moves it. */
+[data-unfeed-hidden] {
+  display: none !important;
+}
 `;
 
   // src/rules/instagram.json
