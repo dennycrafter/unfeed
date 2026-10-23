@@ -47,4 +47,7 @@ export interface WebViewHostApi {
   /** Runs a snippet in the page, for example the Instagram Post hook. No
    * web preview effect: there is no real page there. */
   runScript(code: string): void;
+  /** Switches the route guard's context at once, before the next render,
+   * for a session the page announces (LinkedIn's open post composer). */
+  setContext(context: string): void;
 }

@@ -100,6 +100,11 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         action: "allow"
       },
       {
+        id: "li-8-composer-session",
+        match: { kind: "exact", paths: ["/feed/"], context: "composer" },
+        action: "allow"
+      },
+      {
         id: "li-8-shared-post",
         match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
         action: "allowIfSharedPosts",
@@ -145,6 +150,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
     var _a, _b, _c;
     const query = rule.match.query;
     if (query && !query.every((key) => url.searchParams.has(key))) return false;
+    if (rule.match.kind !== "home" && rule.match.context !== void 0 && context !== rule.match.context) return false;
     switch (rule.match.kind) {
       case "prefix":
         return ((_a = rule.match.paths) != null ? _a : []).some((prefix) => path.startsWith(prefix));
@@ -543,16 +549,65 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
     }
     hide(trigger);
   }
-  var OPEN_APP_PATTERN = /open (in |the )?app|get the app/i;
+  var OPEN_APP_PATTERN = /\b(open|use|get|try|download|install|switch to|continue in|view in|see (this|it) in)\b.{0,24}\bapp\b|\bbetter (on|in) the app\b|\blinkedin app\b/i;
+  var APP_LINK = 'a[href*="apps.apple.com"], a[href*="itunes.apple.com"], a[href*="play.google.com"], a[href^="linkedin:"], a[href^="voyager:"], a[href^="intent:"], a[href*=".app.link"], a[href*="onelink.me"]';
+  var DIALOG = '[role="dialog"], [role="alertdialog"], dialog, [aria-modal="true"]';
+  var DISMISS_PATTERN = /^(not now|dismiss|close|no thanks|maybe later|cancel|stay on (the )?(mobile )?(web|site|browser|website)|continue (on|in|with) (the )?(mobile )?(browser|web|website))\b/i;
+  function isAppPromptText(text) {
+    return text.length <= 80 && OPEN_APP_PATTERN.test(text);
+  }
+  function isAppPromptDialog(dialog) {
+    var _a;
+    const text = ((_a = dialog.textContent) != null ? _a : "").trim();
+    return text.length <= 600 && (OPEN_APP_PATTERN.test(text) || dialog.querySelector(APP_LINK) !== null);
+  }
+  function dismissButton(dialog) {
+    var _a, _b, _c;
+    for (const button of dialog.querySelectorAll('button, [role="button"], a')) {
+      const label = `${(_a = button.getAttribute("aria-label")) != null ? _a : ""} ${((_b = button.textContent) != null ? _b : "").trim()}`.trim();
+      if (DISMISS_PATTERN.test(label) || /^(dismiss|close)\b/i.test((_c = button.getAttribute("aria-label")) != null ? _c : "")) {
+        if (button instanceof HTMLElement) return button;
+      }
+    }
+    return null;
+  }
+  function closeAppDialog(dialog) {
+    if (dialog.getAttribute("data-unfeed-dismissed") !== null) {
+      hideDialogWithBackdrop(dialog);
+      return;
+    }
+    dialog.setAttribute("data-unfeed-dismissed", "");
+    const button = dismissButton(dialog);
+    if (button) button.click();
+    else hideDialogWithBackdrop(dialog);
+  }
+  function hideDialogWithBackdrop(dialog) {
+    var _a, _b;
+    let target = dialog;
+    let node = dialog.parentElement;
+    const text = ((_a = dialog.textContent) != null ? _a : "").trim();
+    while (node && node !== document.body && ((_b = node.textContent) != null ? _b : "").trim() === text) {
+      target = node;
+      node = node.parentElement;
+    }
+    hide(target);
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+  }
   var hideBannersAndUpsells = () => {
     var _a, _b, _c;
     for (const banner of document.querySelectorAll('[role="banner"]')) {
-      if (!isHidden(banner) && OPEN_APP_PATTERN.test((_a = banner.textContent) != null ? _a : "")) hide(banner);
+      if (isHidden(banner) || banner.matches("header")) continue;
+      if (OPEN_APP_PATTERN.test((_a = banner.textContent) != null ? _a : "")) hide(banner);
     }
-    for (const trigger of document.querySelectorAll("a, button")) {
-      if (isHidden(trigger)) continue;
+    for (const dialog of document.querySelectorAll(DIALOG)) {
+      if (isHidden(dialog) || dialog.closest(`[${HIDDEN_ATTR}]`)) continue;
+      if (isAppPromptDialog(dialog)) closeAppDialog(dialog);
+    }
+    for (const trigger of document.querySelectorAll('a, button, [role="button"]')) {
+      if (isHidden(trigger) || trigger.closest(`[${HIDDEN_ATTR}]`) || trigger.closest(DIALOG)) continue;
       const text = ((_b = trigger.textContent) != null ? _b : "").trim();
-      if (OPEN_APP_PATTERN.test(text)) {
+      if (isAppPromptText(text) || trigger.matches(APP_LINK)) {
         hideTightContainer(trigger);
         continue;
       }
@@ -594,6 +649,55 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       '[data-urn^="urn:li:activity"], [data-urn^="urn:li:share"], [data-urn^="urn:li:ugcPost"], [data-id^="urn:li:activity"]'
     );
   };
+  var COMPOSER_EDITOR = '[contenteditable="true"], textarea, [role="textbox"]';
+  var COMPOSER_GONE_MS = 1500;
+  var COMPOSER_NEVER_SHOWED_MS = 12e3;
+  function composerSession() {
+    var _a;
+    const scope = globalThis;
+    return scope.__UNFEED_LI_COMPOSER__ = (_a = scope.__UNFEED_LI_COMPOSER__) != null ? _a : {
+      open: false,
+      since: 0,
+      sawEditor: false,
+      lastEditorAt: 0,
+      previousContext: void 0
+    };
+  }
+  function setPageContext(value) {
+    globalThis.__UNFEED_CONTEXT__ = value;
+  }
+  var trackComposer = (_settings, post) => {
+    const state = composerSession();
+    const path = location.pathname.toLowerCase().replace(/\/?$/, "/");
+    const onFeed = path === "/feed/";
+    if (onFeed && new URLSearchParams(location.search).has("shareActive") && !state.open) {
+      state.open = true;
+      state.since = Date.now();
+      state.sawEditor = false;
+      state.previousContext = globalThis.__UNFEED_CONTEXT__;
+      setPageContext("composer");
+      post({ type: "li-composer", open: true });
+    }
+    if (!state.open) return;
+    const close = (backToMessages) => {
+      state.open = false;
+      setPageContext(state.previousContext);
+      post({ type: "li-composer", open: false });
+      if (backToMessages) window.location.replace(new URL("/messaging/", location.origin).href);
+    };
+    if (!onFeed) {
+      close(false);
+      return;
+    }
+    const now = Date.now();
+    if (document.querySelector(COMPOSER_EDITOR)) {
+      state.sawEditor = true;
+      state.lastEditorAt = now;
+      return;
+    }
+    const waited = now - (state.sawEditor ? state.lastEditorAt : state.since);
+    if (waited > (state.sawEditor ? COMPOSER_GONE_MS : COMPOSER_NEVER_SHOWED_MS)) close(true);
+  };
   var OWN_PROFILE_EDIT = /\/in\/([^/?#]+)\/edit\//;
   var detectOwnProfile = (_settings, post) => {
     var _a, _b, _c;
@@ -620,6 +724,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       hideCountTexts,
       hideHomeItem,
       hideFeedBehindComposer,
+      trackComposer,
       detectOwnProfile
     ],
     unread: true,

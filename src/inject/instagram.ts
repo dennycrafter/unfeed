@@ -183,28 +183,148 @@ const hideAppBanners: HideSweep = () => {
   }
 };
 
-/** The native Post button calls this: it opens Instagram's own create flow
- * by pressing its New post control, which stays in the page while hidden.
- * Reports back when the page has no such control (a DM thread, say). */
+const KEEP_ATTR = 'data-unfeed-keep';
+
+/** Story controls on the home page: buttons labelled "Story by name", the
+ * own "Your story" item and links into /stories/. Never inside a feed post. */
+const STORY_CONTROL = '[aria-label^="Story by" i], [aria-label$="\'s story" i], [aria-label="Your story" i], a[href^="/stories/"]';
+
+function storyControls(): Element[] {
+  return [...document.querySelectorAll(STORY_CONTROL)].filter((element) => !element.closest('article'));
+}
+
+function commonAncestor(elements: Element[]): Element | null {
+  let candidate: Element | null = elements[0] ?? null;
+  while (candidate && !elements.every((element) => candidate!.contains(element))) {
+    candidate = candidate.parentElement;
+  }
+  return candidate;
+}
+
+const NOTE_ID = 'unfeed-stories-note';
+const NOTE_AFTER_MS = 8000;
+
+/** Shown when the tray never turns up, so a blank page explains itself. */
+function showStoriesNote(): void {
+  if (document.getElementById(NOTE_ID) || !document.body) return;
+  const note = document.createElement('div');
+  note.id = NOTE_ID;
+  note.setAttribute(KEEP_ATTR, '');
+  note.textContent = 'No stories to show right now.';
+  note.style.cssText =
+    'position:fixed;left:16px;right:16px;top:40%;text-align:center;color:#9a9aa3;' +
+    'font:15px -apple-system,Inter,system-ui,sans-serif;z-index:2147483647;';
+  document.body.appendChild(note);
+}
+
+/** The stories button (Denis, 23 Oct 2026): the home page is invisible and
+ * only the stories tray is kept, found from the story controls themselves.
+ * The tray is the smallest element holding every control; if that would be
+ * the page, each control is kept on its own instead. */
+const keepStoriesTray: HideSweep = () => {
+  if (!pageScopes(location.pathname).includes('home')) return;
+  const scope = globalThis as { __UNFEED_IG__?: { homeSince?: number } };
+  const state = (scope.__UNFEED_IG__ = scope.__UNFEED_IG__ ?? {});
+  state.homeSince = state.homeSince ?? Date.now();
+  const controls = storyControls();
+  if (controls.length === 0) {
+    if (Date.now() - state.homeSince > NOTE_AFTER_MS) showStoriesNote();
+    return;
+  }
+  document.getElementById(NOTE_ID)?.remove();
+  const tray = controls.length > 1 ? commonAncestor(controls) : (controls[0].parentElement ?? controls[0]);
+  const tooBig = !tray || tray.matches('main, [role="main"], body, html') || tray.querySelector('article') !== null;
+  const keep = tooBig ? controls : [tray];
+  for (const element of keep) {
+    if (element.getAttribute(KEEP_ATTR) === null) element.setAttribute(KEEP_ATTR, '');
+  }
+};
+
+/** Videos friends send (Denis, 23 Oct 2026): keep them playing inside the
+ * page, so iOS never throws them into its own sideways full screen player. */
+const keepVideosInline: HideSweep = () => {
+  for (const video of document.querySelectorAll('video')) {
+    if (video.getAttribute('playsinline') !== null) continue;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.playsInline = true;
+  }
+};
+
+/** Instagram's own create controls, newest labels first. */
+const CREATE_LABEL = /^(new post|create|new|post)$/i;
+
+function findCreateControl(): HTMLElement | null {
+  for (const svg of document.querySelectorAll('svg[aria-label]')) {
+    if (!CREATE_LABEL.test(svg.getAttribute('aria-label') ?? '')) continue;
+    const control = svg.closest('a, button, [role="link"], [role="button"]');
+    if (control instanceof HTMLElement) return control;
+  }
+  const link = document.querySelector('a[href^="/create/"]');
+  if (link instanceof HTMLElement) return link;
+  const input = document.querySelector('input[type="file"][accept*="image"], input[type="file"][accept*="video"]');
+  return input instanceof HTMLElement ? input : null;
+}
+
+const SHEET_ID = 'unfeed-post-sheet';
+
+/** iOS only opens the photo picker from a real tap inside the page, and a
+ * tap on the native Post button is not one. So Post shows this small sheet,
+ * and its button press (a real tap) presses Instagram's own control. */
+function showPostSheet(control: HTMLElement): void {
+  document.getElementById(SHEET_ID)?.remove();
+  const sheet = document.createElement('div');
+  sheet.id = SHEET_ID;
+  sheet.setAttribute(KEEP_ATTR, '');
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-label', 'New post');
+  sheet.style.cssText =
+    'position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;background:#1c1c20;' +
+    'border:1px solid #2a2a30;border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.3);padding:16px;' +
+    'font:15px -apple-system,Inter,system-ui,sans-serif;color:#f2f2f4;';
+  const title = document.createElement('div');
+  title.textContent = 'New post';
+  title.style.cssText = 'font-weight:600;margin-bottom:4px;';
+  const hint = document.createElement('div');
+  hint.textContent = 'Pick a photo or video to share on Instagram.';
+  hint.style.cssText = 'color:#9a9aa3;margin-bottom:14px;';
+  const choose = document.createElement('button');
+  choose.type = 'button';
+  choose.textContent = 'Choose photo or video';
+  choose.style.cssText =
+    'display:block;width:100%;padding:12px;border:0;border-radius:6px;background:#2ee6a6;color:#0b0b0d;' +
+    'font:600 15px -apple-system,Inter,system-ui,sans-serif;';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText =
+    'display:block;width:100%;margin-top:8px;padding:10px;border:0;background:none;color:#9a9aa3;' +
+    'font:15px -apple-system,Inter,system-ui,sans-serif;';
+  choose.addEventListener('click', () => {
+    sheet.remove();
+    control.click();
+  });
+  cancel.addEventListener('click', () => sheet.remove());
+  sheet.append(title, hint, choose, cancel);
+  document.body.appendChild(sheet);
+}
+
+/** The native Post button calls this. Reports back when the page has no
+ * create control (a DM thread, say), so native can try the profile page. */
 function installCreateHook(): void {
   const scope = globalThis as { __UNFEED_CREATE__?: () => void };
   const post = createPoster('instagram');
   scope.__UNFEED_CREATE__ = () => {
-    for (const svg of document.querySelectorAll('svg[aria-label="New post"], svg[aria-label="Create"]')) {
-      const control = svg.closest('a, button, [role="link"], [role="button"]');
-      if (control instanceof HTMLElement) {
-        control.click();
-        return;
-      }
-    }
-    post({ type: 'ig-create-missing' });
+    const control = findCreateControl();
+    if (control) showPostSheet(control);
+    else post({ type: 'ig-create-missing' });
   };
 }
 
 installCreateHook();
 
 setupInject('instagram', {
-  sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners],
+  sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepStoriesTray, keepVideosInline],
   unread: true,
   enforce: true,
 });

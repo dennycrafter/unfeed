@@ -19,6 +19,12 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }));
 
+jest.mock('expo-clipboard', () => ({
+  getStringAsync: jest.fn().mockResolvedValue('Look at this https://www.instagram.com/reel/XYZ/?igsh=abc'),
+}));
+
+jest.mock('expo-audio', () => ({ setAudioModeAsync: jest.fn().mockResolvedValue(undefined) }));
+
 jest.mock('expo-linking', () => ({
   openURL: jest.fn().mockResolvedValue(undefined),
 }));
@@ -44,7 +50,10 @@ const mockInjectJavaScript = jest.fn();
 jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const WebView = React.forwardRef(function MockWebView(props: { testID?: string }, ref: React.Ref<unknown>) {
+  const WebView = React.forwardRef(function MockWebView(
+    props: { testID?: string; source?: { uri?: string } },
+    ref: React.Ref<unknown>,
+  ) {
     React.useImperativeHandle(ref, () => ({
       goBack: () => undefined,
       canGoBack: () => false,
@@ -54,7 +63,8 @@ jest.mock('react-native-webview', () => {
       injectJavaScript: (code: string) => mockInjectJavaScript(props.testID, code),
       stopLoading: () => undefined,
     }));
-    return <View testID={props.testID} />;
+    // The loaded address rides on the hint so tests can read it.
+    return <View testID={props.testID} accessibilityHint={props.source?.uri} />;
   });
   return { __esModule: true, WebView, default: WebView };
 });
@@ -185,4 +195,58 @@ test('haptics follow the settings toggle', async () => {
   updateSettings({ haptics: false });
   await fireEvent.press(getByLabelText('Instagram'));
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
+});
+
+function loadedUrl(getByTestId: (id: string, options?: object) => { props: { accessibilityHint?: string } }, site: string) {
+  return getByTestId(`webview-${site}`, anyVisibility).props.accessibilityHint;
+}
+
+test('a pasted Instagram link opens inside the Instagram host and the pop-up closes', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId, queryByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Open a link'));
+  await fireEvent.changeText(getByLabelText('Link'), 'instagram.com/p/ABC123/');
+  await fireEvent.press(getByLabelText('Open link'));
+  await waitFor(() => expect(loadedUrl(getByTestId, 'instagram')).toBe('https://www.instagram.com/p/ABC123/'));
+  expect(queryByTestId('link-sheet')).toBeNull();
+});
+
+test('Paste reads what was copied and opens it at once', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Open a link'));
+  await fireEvent.press(getByLabelText('Paste'));
+  await waitFor(() =>
+    expect(loadedUrl(getByTestId, 'instagram')).toBe('https://www.instagram.com/reel/XYZ/?igsh=abc'),
+  );
+});
+
+test('a pasted LinkedIn link switches to LinkedIn and opens there', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Open a link'));
+  await fireEvent.changeText(getByLabelText('Link'), 'https://www.linkedin.com/in/someone/');
+  await fireEvent.press(getByLabelText('Open link'));
+  await waitFor(() => expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/in/someone/'));
+  expect(isHidden(getByTestId('host-linkedin', anyVisibility))).toBe(false);
+});
+
+test('text that is not a link Unfeed opens shows a short error and stays open', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Open a link'));
+  await fireEvent.changeText(getByLabelText('Link'), 'https://example.com/page');
+  await fireEvent.press(getByLabelText('Open link'));
+  expect(getByText('That is not an Instagram or LinkedIn link.')).toBeTruthy();
+  expect(getByTestId('link-sheet')).toBeTruthy();
+});
+
+test('the LinkedIn Post button opens LinkedIn\'s own composer', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
+  await fireEvent.press(getByLabelText('New LinkedIn post'));
+  await waitFor(() =>
+    expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/feed/?shareActive=true'),
+  );
 });

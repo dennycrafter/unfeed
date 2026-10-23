@@ -65,7 +65,7 @@ Run lint and typecheck before declaring any task done. Playwright needs its brow
 
 ## Dependencies
 
-Expo Go only includes its bundled native modules. The approved list is in the charter (react-native-webview, expo-camera, react-native-svg, async-storage, expo-haptics, expo-linking, expo-router, safe-area-context, screens, react-native-qrcode-svg). Adding anything else breaks Expo Go. If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation); never create or edit them by hand.
+Expo Go only includes its bundled native modules. The approved list is in the charter (react-native-webview, expo-camera, react-native-svg, async-storage, expo-haptics, expo-linking, expo-router, safe-area-context, screens, react-native-qrcode-svg, plus expo-clipboard and expo-audio, both included in Expo Go). Adding anything else breaks Expo Go. If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation); never create or edit them by hand.
 
 ## PR rules
 

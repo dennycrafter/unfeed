@@ -19,6 +19,8 @@ export const LINKEDIN_PROFILE_ME_URL = 'https://www.linkedin.com/in/me/';
 /** The mobile web sign out route. Navigating here signs the session out;
  * Expo Go has no per site cookie API (charter 8.8, see ASSUMPTIONS). */
 export const LINKEDIN_LOGOUT_URL = 'https://www.linkedin.com/m/logout/';
+/** LinkedIn's own post composer (rule li-8-composer). */
+export const LINKEDIN_COMPOSER_URL = 'https://www.linkedin.com/feed/?shareActive=true';
 
 export interface LinkedInHostProps {
   settings: DecideSettings;
@@ -38,6 +40,10 @@ export interface LinkedInHostProps {
   onOpenInstagramUrl?: (url: string) => void;
   /** Opens the settings screen, where the profile link can be typed in. */
   onOpenSettings?: () => void;
+  /** Bump to open LinkedIn's post composer (the header Post button). */
+  composeSignal?: number;
+  /** A pasted LinkedIn link to open; the id makes the same link open twice. */
+  openRequest?: { url: string; id: number } | null;
   onMessage?: (message: PageMessage) => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -53,11 +59,20 @@ export function LinkedInHost({
   onProfileVanityDetected,
   onOpenInstagramUrl,
   onOpenSettings,
+  composeSignal = 0,
+  openRequest = null,
   onMessage,
   style,
 }: LinkedInHostProps) {
   const hostRef = useRef<WebViewHostApi | null>(null);
   const [url, setUrl] = useState(LINKEDIN_MESSENGER_URL);
+  // Post composer session (Denis, 23 Oct 2026): the route guard lets the
+  // bare /feed/ through only while LinkedIn's composer is open.
+  const [composerOpen, setComposerOpen] = useState(false);
+  const setComposer = useCallback((open: boolean): void => {
+    hostRef.current?.setContext(open ? 'composer' : 'page');
+    setComposerOpen(open);
+  }, []);
   const urlRef = useRef(url);
   const qrOpenRef = useRef(qrOpen);
   useEffect(() => {
@@ -108,6 +123,12 @@ export function LinkedInHost({
 
   const handleMessage = useCallback(
     (message: PageMessage): void => {
+      if (message.type === 'li-composer') {
+        setComposer(message.open);
+      } else if (message.type === 'route' && message.url.includes('shareActive')) {
+        // LinkedIn's own Post item: the composer is opening.
+        setComposer(true);
+      }
       if (message.type === 'li-own-profile') {
         // Only the own profile carries edit links, so this is always Denis.
         saveOwnProfile(message.url);
@@ -120,8 +141,27 @@ export function LinkedInHost({
       }
       onMessage?.(message);
     },
-    [onMessage, saveOwnProfile],
+    [onMessage, saveOwnProfile, setComposer],
   );
+
+  // The header Post button opens LinkedIn's own composer.
+  const lastComposeRef = useRef(0);
+  useEffect(() => {
+    if (composeSignal === 0 || composeSignal === lastComposeRef.current) return;
+    lastComposeRef.current = composeSignal;
+    onQrOpenChange?.(false);
+    setComposer(true);
+    navigate(LINKEDIN_COMPOSER_URL);
+  }, [composeSignal, navigate, onQrOpenChange, setComposer]);
+
+  // A pasted LinkedIn link (the header Link button).
+  const lastOpenRef = useRef(0);
+  useEffect(() => {
+    if (!openRequest || openRequest.id === lastOpenRef.current) return;
+    lastOpenRef.current = openRequest.id;
+    onQrOpenChange?.(false);
+    navigate(openRequest.url);
+  }, [navigate, onQrOpenChange, openRequest]);
 
   // Scanned LinkedIn codes (charter 8.7) open in the page behind the panel.
   const openScannedLinkedInUrl = useCallback(
@@ -161,7 +201,7 @@ export function LinkedInHost({
         ref={hostRef}
         site="linkedin"
         url={url}
-        context="page"
+        context={composerOpen ? 'composer' : 'page'}
         settings={settings}
         hideCounts={hideCounts}
         injectScript={LINKEDIN_INJECT_SCRIPT}

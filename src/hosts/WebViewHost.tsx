@@ -76,6 +76,9 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
       runScript(code: string) {
         webViewRef.current?.injectJavaScript(`${code}; true;`);
       },
+      setContext(next: string) {
+        contextRef.current = next;
+      },
     }),
     [],
   );
