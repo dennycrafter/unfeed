@@ -4,6 +4,7 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
+import { allowSoundInSilentMode } from '@/state/audio';
 import { hydrateSettings } from '@/state/store';
 import { colors } from '@/theme/tokens';
 
@@ -12,6 +13,8 @@ export default function RootLayout() {
   // screen then reads the same snapshot from the shared store.
   useEffect(() => {
     void hydrateSettings();
+    // Videos in the web views play with sound even on silent (Denis, 23 Oct).
+    void allowSoundInSilentMode();
   }, []);
 
   return (

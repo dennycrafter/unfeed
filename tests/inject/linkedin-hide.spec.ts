@@ -159,3 +159,44 @@ test('profile fixture: hide counts setting removes the connection count', async 
   await expect(page.locator('.connection-count')).toBeHidden();
   await expect(page.locator('.profile-headline')).toBeVisible();
 });
+
+test('get the app prompts: the bottom banner hides, pop-ups close, messages stay', async ({ page }) => {
+  await routeFixture(page, 'linkedin-app-prompts.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/messaging/');
+  await expect(page.locator('.bottom-banner')).toBeHidden();
+  // The pop-up with a Not now button is closed by pressing it.
+  await expect(page.locator('.backdrop')).toHaveCount(0);
+  // The pop-up without one is hidden with its backdrop, and scrolling comes back.
+  await expect(page.locator('.backdrop-two')).toBeHidden();
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  await expect(page.locator('header[role="banner"]')).toBeVisible();
+  await expect(page.getByText('Can you send me the deck before Friday?')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download the deck' })).toBeVisible();
+});
+
+test('post composer: stays open after the site drops shareActive, feed hidden, then back to Messages', async ({ page }) => {
+  await routeFixture(page, 'linkedin-composer.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/feed/?shareActive=true');
+  await page.waitForFunction(() => location.search === '');
+  await page.waitForTimeout(600);
+  // Still on the bare feed address with the composer open: not bounced.
+  expect(new URL(page.url()).pathname).toBe('/feed/');
+  await expect(page.getByRole('textbox', { name: 'Text editor for creating content' })).toBeVisible();
+  await expect(page.getByText("Somebody's feed post")).toBeHidden();
+  const messages = await page.evaluate(
+    () => (window as unknown as { __unfeedMessages: Array<{ type: string; open?: boolean }> }).__unfeedMessages,
+  );
+  expect(messages).toContainEqual({ type: 'li-composer', open: true });
+  // Posting closes the composer; the session ends and the page goes to Messages.
+  await page.getByRole('button', { name: 'Post' }).click();
+  await page.waitForURL('https://www.linkedin.com/messaging/', { timeout: 10_000 });
+});
+
+test('post composer: the bare feed without a composer still bounces to Messages', async ({ page }) => {
+  await routeFixture(page, 'linkedin-composer.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/feed/');
+  await page.waitForURL('https://www.linkedin.com/messaging/');
+});

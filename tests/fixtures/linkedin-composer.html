@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- LinkedIn's post composer as Denis hit it on 23 Oct 2026: it opens at
+     /feed/?shareActive=true, then the site drops shareActive from the
+     address while the composer stays open over the feed. Class names are
+     fake hashes. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Feed | LinkedIn</title>
+  </head>
+  <body>
+    <main class="Kd8s2P">
+      <div class="feed-card Hq2m0x" data-urn="urn:li:activity:111">Somebody's feed post</div>
+      <div class="feed-card Hq2m0x" data-urn="urn:li:activity:222">Another feed post</div>
+    </main>
+    <div role="dialog" class="composer Lm9x2A" aria-label="Create a post">
+      <div contenteditable="true" role="textbox" aria-label="Text editor for creating content" class="editor Pq7n3s"></div>
+      <button type="button" class="post-button Zw4r1t" onclick="document.querySelector('.composer').remove()">Post</button>
+    </div>
+    <script>
+      if (location.search.includes('shareActive')) {
+        setTimeout(() => history.replaceState({}, '', '/feed/'), 100);
+      } else {
+        document.querySelector('.composer').remove();
+      }
+    </script>
+  </body>
+</html>

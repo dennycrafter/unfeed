@@ -48,8 +48,19 @@ main a[href^="/tv/"] {
   display: none !important;
 }
 
-/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */
-main > :not(:first-child),
+/* @unfeed-rule ig-home-feed scope=home -- the home page shows the stories tray only: the page is invisible except what the tray sweep keeps, so the feed never paints even when the site changes its layout (Denis, 23 Oct 2026) */
+main {
+  visibility: hidden !important;
+}
+[data-unfeed-keep],
+[data-unfeed-keep] * {
+  visibility: visible !important;
+}
+html,
+body {
+  overflow: hidden !important;
+}
+main > :not(:first-child):not(:has([data-unfeed-keep])),
 article,
 section:has(a[href^="/explore/people/"]),
 div:has(> a[href^="/explore/people/"]) {
@@ -215,6 +226,11 @@ a[href$="/following/"] {
         action: "allow"
       },
       {
+        id: "li-8-composer-session",
+        match: { kind: "exact", paths: ["/feed/"], context: "composer" },
+        action: "allow"
+      },
+      {
         id: "li-8-shared-post",
         match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
         action: "allowIfSharedPosts",
@@ -260,6 +276,7 @@ a[href$="/following/"] {
     var _a, _b, _c;
     const query = rule.match.query;
     if (query && !query.every((key) => url.searchParams.has(key))) return false;
+    if (rule.match.kind !== "home" && rule.match.context !== void 0 && context !== rule.match.context) return false;
     switch (rule.match.kind) {
       case "prefix":
         return ((_a = rule.match.paths) != null ? _a : []).some((prefix) => path.startsWith(prefix));
@@ -747,23 +764,114 @@ a[href$="/following/"] {
       if (OPEN_APP_PATTERN.test(((_a = trigger.textContent) != null ? _a : "").trim())) hideTightContainer(trigger);
     }
   };
+  var KEEP_ATTR = "data-unfeed-keep";
+  var STORY_CONTROL = `[aria-label^="Story by" i], [aria-label$="'s story" i], [aria-label="Your story" i], a[href^="/stories/"]`;
+  function storyControls() {
+    return [...document.querySelectorAll(STORY_CONTROL)].filter((element) => !element.closest("article"));
+  }
+  function commonAncestor(elements) {
+    var _a;
+    let candidate = (_a = elements[0]) != null ? _a : null;
+    while (candidate && !elements.every((element) => candidate.contains(element))) {
+      candidate = candidate.parentElement;
+    }
+    return candidate;
+  }
+  var NOTE_ID = "unfeed-stories-note";
+  var NOTE_AFTER_MS = 8e3;
+  function showStoriesNote() {
+    if (document.getElementById(NOTE_ID) || !document.body) return;
+    const note = document.createElement("div");
+    note.id = NOTE_ID;
+    note.setAttribute(KEEP_ATTR, "");
+    note.textContent = "No stories to show right now.";
+    note.style.cssText = "position:fixed;left:16px;right:16px;top:40%;text-align:center;color:#9a9aa3;font:15px -apple-system,Inter,system-ui,sans-serif;z-index:2147483647;";
+    document.body.appendChild(note);
+  }
+  var keepStoriesTray = () => {
+    var _a, _b, _c, _d;
+    if (!pageScopes(location.pathname).includes("home")) return;
+    const scope = globalThis;
+    const state = scope.__UNFEED_IG__ = (_a = scope.__UNFEED_IG__) != null ? _a : {};
+    state.homeSince = (_b = state.homeSince) != null ? _b : Date.now();
+    const controls = storyControls();
+    if (controls.length === 0) {
+      if (Date.now() - state.homeSince > NOTE_AFTER_MS) showStoriesNote();
+      return;
+    }
+    (_c = document.getElementById(NOTE_ID)) == null ? void 0 : _c.remove();
+    const tray = controls.length > 1 ? commonAncestor(controls) : (_d = controls[0].parentElement) != null ? _d : controls[0];
+    const tooBig = !tray || tray.matches('main, [role="main"], body, html') || tray.querySelector("article") !== null;
+    const keep = tooBig ? controls : [tray];
+    for (const element of keep) {
+      if (element.getAttribute(KEEP_ATTR) === null) element.setAttribute(KEEP_ATTR, "");
+    }
+  };
+  var keepVideosInline = () => {
+    for (const video of document.querySelectorAll("video")) {
+      if (video.getAttribute("playsinline") !== null) continue;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      video.playsInline = true;
+    }
+  };
+  var CREATE_LABEL = /^(new post|create|new|post)$/i;
+  function findCreateControl() {
+    var _a;
+    for (const svg of document.querySelectorAll("svg[aria-label]")) {
+      if (!CREATE_LABEL.test((_a = svg.getAttribute("aria-label")) != null ? _a : "")) continue;
+      const control = svg.closest('a, button, [role="link"], [role="button"]');
+      if (control instanceof HTMLElement) return control;
+    }
+    const link = document.querySelector('a[href^="/create/"]');
+    if (link instanceof HTMLElement) return link;
+    const input = document.querySelector('input[type="file"][accept*="image"], input[type="file"][accept*="video"]');
+    return input instanceof HTMLElement ? input : null;
+  }
+  var SHEET_ID = "unfeed-post-sheet";
+  function showPostSheet(control) {
+    var _a;
+    (_a = document.getElementById(SHEET_ID)) == null ? void 0 : _a.remove();
+    const sheet = document.createElement("div");
+    sheet.id = SHEET_ID;
+    sheet.setAttribute(KEEP_ATTR, "");
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-label", "New post");
+    sheet.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;background:#1c1c20;border:1px solid #2a2a30;border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.3);padding:16px;font:15px -apple-system,Inter,system-ui,sans-serif;color:#f2f2f4;";
+    const title = document.createElement("div");
+    title.textContent = "New post";
+    title.style.cssText = "font-weight:600;margin-bottom:4px;";
+    const hint = document.createElement("div");
+    hint.textContent = "Pick a photo or video to share on Instagram.";
+    hint.style.cssText = "color:#9a9aa3;margin-bottom:14px;";
+    const choose = document.createElement("button");
+    choose.type = "button";
+    choose.textContent = "Choose photo or video";
+    choose.style.cssText = "display:block;width:100%;padding:12px;border:0;border-radius:6px;background:#2ee6a6;color:#0b0b0d;font:600 15px -apple-system,Inter,system-ui,sans-serif;";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.style.cssText = "display:block;width:100%;margin-top:8px;padding:10px;border:0;background:none;color:#9a9aa3;font:15px -apple-system,Inter,system-ui,sans-serif;";
+    choose.addEventListener("click", () => {
+      sheet.remove();
+      control.click();
+    });
+    cancel.addEventListener("click", () => sheet.remove());
+    sheet.append(title, hint, choose, cancel);
+    document.body.appendChild(sheet);
+  }
   function installCreateHook() {
     const scope = globalThis;
     const post = createPoster("instagram");
     scope.__UNFEED_CREATE__ = () => {
-      for (const svg of document.querySelectorAll('svg[aria-label="New post"], svg[aria-label="Create"]')) {
-        const control = svg.closest('a, button, [role="link"], [role="button"]');
-        if (control instanceof HTMLElement) {
-          control.click();
-          return;
-        }
-      }
-      post({ type: "ig-create-missing" });
+      const control = findCreateControl();
+      if (control) showPostSheet(control);
+      else post({ type: "ig-create-missing" });
     };
   }
   installCreateHook();
   setupInject("instagram", {
-    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners],
+    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepStoriesTray, keepVideosInline],
     unread: true,
     enforce: true
   });

@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- LinkedIn messaging with both get the app prompts Denis saw on 23 Oct
+     2026: a small banner pinned to the bottom and a bigger pop-up over a
+     dark backdrop that locks scrolling. The pop-up's Not now removes it,
+     like the real one. Class names are fake hashes. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Messaging | LinkedIn</title>
+  </head>
+  <body style="overflow: hidden">
+    <header role="banner" class="Qm2x8K">
+      <a href="/messaging/">Messaging</a>
+      <a href="/notifications/">Notifications</a>
+    </header>
+    <main class="messaging-thread Zp3k1L">
+      <p>Can you send me the deck before Friday?</p>
+      <a href="https://example.com/download-the-deck">Download the deck</a>
+    </main>
+    <div class="bottom-banner Rr8vQe" style="position: fixed; bottom: 0; left: 0; right: 0">
+      <span>LinkedIn is better on the app</span>
+      <a href="https://apps.apple.com/app/linkedin/id288429040" class="Lp2s0d">Use app</a>
+    </div>
+    <div class="backdrop Hn5tW2" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6)">
+      <div role="dialog" aria-modal="true" aria-labelledby="t" class="app-popup Vb6nQ1">
+        <h2 id="t">See more in the LinkedIn app</h2>
+        <a href="linkedin://messaging" class="Bn3Xk1">Open the app</a>
+        <button type="button" class="Cv8Lp0" onclick="document.querySelector('.backdrop').remove(); document.body.style.overflow = ''">Not now</button>
+      </div>
+    </div>
+    <div class="backdrop-two Hn5tW3" style="position: fixed; inset: 0">
+      <div role="dialog" class="app-popup-two Vb6nQ2">
+        <p>Get the full experience on the LinkedIn app</p>
+        <a href="https://linkedin.app.link/abc" class="Bn3Xk2">Get the app</a>
+      </div>
+    </div>
+  </body>
+</html>

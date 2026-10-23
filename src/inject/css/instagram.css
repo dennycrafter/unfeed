@@ -32,8 +32,19 @@ main a[href^="/tv/"] {
   display: none !important;
 }
 
-/* @unfeed-rule ig-home-feed scope=home -- feed articles, everything after the stories tray and Suggested for you */
-main > :not(:first-child),
+/* @unfeed-rule ig-home-feed scope=home -- the home page shows the stories tray only: the page is invisible except what the tray sweep keeps, so the feed never paints even when the site changes its layout (Denis, 23 Oct 2026) */
+main {
+  visibility: hidden !important;
+}
+[data-unfeed-keep],
+[data-unfeed-keep] * {
+  visibility: visible !important;
+}
+html,
+body {
+  overflow: hidden !important;
+}
+main > :not(:first-child):not(:has([data-unfeed-keep])),
 article,
 section:has(a[href^="/explore/people/"]),
 div:has(> a[href^="/explore/people/"]) {

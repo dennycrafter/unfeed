@@ -38,7 +38,7 @@ test('all settings rows render with their values', async () => {
     JSON.stringify({ ...DEFAULT_SETTINGS, igUsername: 'denis' }),
   );
   await hydrateSettings();
-  const { getByText, getByDisplayValue } = render(<SettingsScreen />);
+  const { getByText, getByDisplayValue } = await render(<SettingsScreen />);
   expect(getByText('Instagram username')).toBeTruthy();
   expect(getByText('LinkedIn profile link')).toBeTruthy();
   expect(getByText("Open friends' shared posts")).toBeTruthy();
@@ -51,8 +51,8 @@ test('all settings rows render with their values', async () => {
 
 test('toggling a switch saves the change at once', async () => {
   await hydrateSettings();
-  const { getByLabelText } = render(<SettingsScreen />);
-  fireEvent(getByLabelText('Hide like and follower counts'), 'valueChange', true);
+  const { getByLabelText } = await render(<SettingsScreen />);
+  await fireEvent(getByLabelText('Hide like and follower counts'), 'valueChange', true);
   await waitFor(async () => expect((await storedSettings()).hideCounts).toBe(true));
   expect(getStoreState().settings.hideCounts).toBe(true);
 });
@@ -63,12 +63,12 @@ test('the reset flow restores the defaults after confirmation', async () => {
     JSON.stringify({ ...DEFAULT_SETTINGS, hideCounts: true, haptics: false, lastApp: 'linkedin' }),
   );
   await hydrateSettings();
-  const { getByLabelText, getByText } = render(<SettingsScreen />);
-  fireEvent.press(getByLabelText('Reset to defaults'));
+  const { getByLabelText, getByText } = await render(<SettingsScreen />);
+  await fireEvent.press(getByLabelText('Reset to defaults'));
   // The dialog is open: its body text is on screen and the plain Reset
   // button (exact label) is now pressable.
   expect(getByText('Every setting goes back to how it started. Your logins are not touched.')).toBeTruthy();
-  fireEvent.press(getByLabelText('Reset', { exact: true }));
+  await fireEvent.press(getByLabelText('Reset', { exact: true }));
   await waitFor(async () => expect((await storedSettings()).haptics).toBe(DEFAULT_SETTINGS.haptics));
   expect(getStoreState().settings).toEqual(DEFAULT_SETTINGS);
   expect(getByText('Settings back to defaults.')).toBeTruthy();
@@ -76,10 +76,10 @@ test('the reset flow restores the defaults after confirmation', async () => {
 
 test('logging out asks first and then raises the request', async () => {
   await hydrateSettings();
-  const { getByLabelText, getByText } = render(<SettingsScreen />);
-  fireEvent.press(getByLabelText('Log out of Instagram'));
+  const { getByLabelText, getByText } = await render(<SettingsScreen />);
+  await fireEvent.press(getByLabelText('Log out of Instagram'));
   expect(getByText('The app signs this account out here. You can log back in with your username and password.')).toBeTruthy();
-  fireEvent.press(getByLabelText('Log out', { exact: true }));
+  await fireEvent.press(getByLabelText('Log out', { exact: true }));
   await waitFor(() => expect(getStoreState().logout?.site).toBe('instagram'));
   expect(getByText('Signing out of Instagram. Log back in with your username and password.')).toBeTruthy();
 });

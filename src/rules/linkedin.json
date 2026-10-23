@@ -32,6 +32,11 @@
       "action": "allow"
     },
     {
+      "id": "li-8-composer-session",
+      "match": { "kind": "exact", "paths": ["/feed/"], "context": "composer" },
+      "action": "allow"
+    },
+    {
       "id": "li-8-shared-post",
       "match": { "kind": "prefix", "paths": ["/feed/update/", "/posts/"] },
       "action": "allowIfSharedPosts",

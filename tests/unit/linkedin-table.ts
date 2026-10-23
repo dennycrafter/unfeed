@@ -103,6 +103,12 @@ export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
   // The post composer on the feed path (rule li-8-composer)
   { name: 'the post composer allowed', url: 'https://www.linkedin.com/feed/?shareActive=true', expected: ALLOW },
   { name: 'the post composer allowed with other keys', url: 'https://www.linkedin.com/feed/?shareActive=true&text=hi', expected: ALLOW },
+  // Composer session (rule li-8-composer-session, Denis 23 Oct 2026): the
+  // site drops shareActive from the address while the composer is open, so
+  // the bare feed stays allowed for that session only.
+  { name: 'the bare feed allowed while the composer is open', url: 'https://www.linkedin.com/feed/', context: 'composer', expected: ALLOW },
+  { name: 'the bare feed still redirects outside the composer', url: 'https://www.linkedin.com/feed/', context: 'page', expected: toMessaging },
+  { name: 'a feed sub page redirects even while the composer is open', url: 'https://www.linkedin.com/feed/following/', context: 'composer', expected: toMessaging },
   { name: 'a post new page allowed', url: 'https://www.linkedin.com/post/new/', expected: ALLOW },
   // Notifications (allowed since 15 Oct 2026)
   { name: 'notifications allowed', url: 'https://www.linkedin.com/notifications/', expected: ALLOW },

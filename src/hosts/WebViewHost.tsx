@@ -40,7 +40,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   { site, url, context, settings, hideCounts = false, injectScript, onMessage, scrollToTopSignal = 0, style, placeholderLabel },
   ref,
 ) {
-  const webViewRef = useRef<WebView | null>(null);
+  const webViewRef = useRef<WebView<object> | null>(null);
   const [source, setSource] = useState(url);
   const [progress, setProgress] = useState(0);
   const canGoBackRef = useRef(false);
@@ -75,6 +75,9 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
       },
       runScript(code: string) {
         webViewRef.current?.injectJavaScript(`${code}; true;`);
+      },
+      setContext(next: string) {
+        contextRef.current = next;
       },
     }),
     [],
@@ -162,7 +165,8 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
 
   return (
     <View style={[styles.fill, style]}>
-      <WebView
+      {/* react-native-webview 14 types collapse the default generic to never, so name an empty prop extension. */}
+      <WebView<object>
         ref={webViewRef}
         testID={`webview-${site}`}
         source={{ uri: source }}

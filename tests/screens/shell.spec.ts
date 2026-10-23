@@ -25,3 +25,29 @@ test.describe('qa capture', () => {
   });
 });
 
+
+// Paste a link and the LinkedIn Post button (Denis, 23 Oct 2026).
+test('the link pop-up opens from the header with made-up text', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open a link' }).click();
+  await page.getByLabel('Link', { exact: true }).fill('https://www.instagram.com/p/MadeUp123/');
+  await expect(page.getByText('Open a link', { exact: true })).toBeVisible();
+  await page.screenshot({ path: join('docs', 'screenshots', 't7-link-sheet.png') });
+});
+
+test('the link pop-up says when the text is not a link it opens', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open a link' }).click();
+  await page.getByLabel('Link', { exact: true }).fill('https://example.com/page');
+  await page.getByRole('button', { name: 'Open link' }).click();
+  await expect(page.getByText('That is not an Instagram or LinkedIn link.')).toBeVisible();
+  await page.screenshot({ path: join('docs', 'screenshots', 't7-link-sheet-error.png') });
+});
+
+test('LinkedIn header shows QR and Post on the left, Link and Settings on the right', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'LinkedIn' }).click();
+  await expect(page.getByRole('button', { name: 'New LinkedIn post' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open a link' })).toBeVisible();
+  await page.screenshot({ path: join('docs', 'screenshots', 't7-linkedin-header.png') });
+});

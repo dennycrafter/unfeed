@@ -79,17 +79,84 @@ function hideTightContainer(trigger: Element): void {
   hide(trigger);
 }
 
-const OPEN_APP_PATTERN = /open (in |the )?app|get the app/i;
+/** Get the app prompts (Denis, 23 Oct 2026): the small bottom banner and
+ * the bigger pop-up asking him to leave the browser version. Matched by
+ * their wording and by links into the app stores or the app itself. */
+const OPEN_APP_PATTERN =
+  /\b(open|use|get|try|download|install|switch to|continue in|view in|see (this|it) in)\b.{0,24}\bapp\b|\bbetter (on|in) the app\b|\blinkedin app\b/i;
 
-/** Banners and upsells: open in app promotions and Try Premium links. */
+const APP_LINK =
+  'a[href*="apps.apple.com"], a[href*="itunes.apple.com"], a[href*="play.google.com"], a[href^="linkedin:"], ' +
+  'a[href^="voyager:"], a[href^="intent:"], a[href*=".app.link"], a[href*="onelink.me"]';
+
+const DIALOG = '[role="dialog"], [role="alertdialog"], dialog, [aria-modal="true"]';
+
+/** Buttons that close an app prompt and keep Denis on the web version. */
+const DISMISS_PATTERN =
+  /^(not now|dismiss|close|no thanks|maybe later|cancel|stay on (the )?(mobile )?(web|site|browser|website)|continue (on|in|with) (the )?(mobile )?(browser|web|website))\b/i;
+
+function isAppPromptText(text: string): boolean {
+  return text.length <= 80 && OPEN_APP_PATTERN.test(text);
+}
+
+/** A pop-up is an app prompt when it is short and talks about the app. */
+function isAppPromptDialog(dialog: Element): boolean {
+  const text = (dialog.textContent ?? '').trim();
+  return text.length <= 600 && (OPEN_APP_PATTERN.test(text) || dialog.querySelector(APP_LINK) !== null);
+}
+
+function dismissButton(dialog: Element): HTMLElement | null {
+  for (const button of dialog.querySelectorAll('button, [role="button"], a')) {
+    const label = `${button.getAttribute('aria-label') ?? ''} ${(button.textContent ?? '').trim()}`.trim();
+    if (DISMISS_PATTERN.test(label) || /^(dismiss|close)\b/i.test(button.getAttribute('aria-label') ?? '')) {
+      if (button instanceof HTMLElement) return button;
+    }
+  }
+  return null;
+}
+
+/** Closes an app pop-up with its own Not now button when it has one, else
+ * hides it with the dark backdrop around it and gives scrolling back. */
+function closeAppDialog(dialog: Element): void {
+  if (dialog.getAttribute('data-unfeed-dismissed') !== null) {
+    // Already pressed once and still here: hide it instead.
+    hideDialogWithBackdrop(dialog);
+    return;
+  }
+  dialog.setAttribute('data-unfeed-dismissed', '');
+  const button = dismissButton(dialog);
+  if (button) button.click();
+  else hideDialogWithBackdrop(dialog);
+}
+
+function hideDialogWithBackdrop(dialog: Element): void {
+  let target = dialog;
+  let node = dialog.parentElement;
+  const text = (dialog.textContent ?? '').trim();
+  // The backdrop wraps the dialog and holds nothing else worth reading.
+  while (node && node !== document.body && (node.textContent ?? '').trim() === text) {
+    target = node;
+    node = node.parentElement;
+  }
+  hide(target);
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+}
+
+/** Banners and upsells: get the app prompts and Try Premium links. */
 const hideBannersAndUpsells: HideSweep = () => {
   for (const banner of document.querySelectorAll('[role="banner"]')) {
-    if (!isHidden(banner) && OPEN_APP_PATTERN.test(banner.textContent ?? '')) hide(banner);
+    if (isHidden(banner) || banner.matches('header')) continue;
+    if (OPEN_APP_PATTERN.test(banner.textContent ?? '')) hide(banner);
   }
-  for (const trigger of document.querySelectorAll('a, button')) {
-    if (isHidden(trigger)) continue;
+  for (const dialog of document.querySelectorAll(DIALOG)) {
+    if (isHidden(dialog) || dialog.closest(`[${HIDDEN_ATTR}]`)) continue;
+    if (isAppPromptDialog(dialog)) closeAppDialog(dialog);
+  }
+  for (const trigger of document.querySelectorAll('a, button, [role="button"]')) {
+    if (isHidden(trigger) || trigger.closest(`[${HIDDEN_ATTR}]`) || trigger.closest(DIALOG)) continue;
     const text = (trigger.textContent ?? '').trim();
-    if (OPEN_APP_PATTERN.test(text)) {
+    if (isAppPromptText(text) || trigger.matches(APP_LINK)) {
       hideTightContainer(trigger);
       continue;
     }
@@ -142,6 +209,73 @@ const hideFeedBehindComposer: HideSweep = () => {
   );
 };
 
+/** Post composer session (Denis, 23 Oct 2026): LinkedIn opens the
+ * composer at /feed/?shareActive=true and then drops shareActive from the
+ * address, which the feed rule used to bounce straight to Messages. While
+ * the composer is open the bare /feed/ is allowed (rule
+ * li-8-composer-session); once its text box has been gone for a moment, or
+ * never showed up, the session ends and the page goes back to Messages. */
+interface ComposerSession {
+  open: boolean;
+  since: number;
+  sawEditor: boolean;
+  lastEditorAt: number;
+  previousContext: unknown;
+}
+
+const COMPOSER_EDITOR = '[contenteditable="true"], textarea, [role="textbox"]';
+const COMPOSER_GONE_MS = 1500;
+const COMPOSER_NEVER_SHOWED_MS = 12000;
+
+function composerSession(): ComposerSession {
+  const scope = globalThis as { __UNFEED_LI_COMPOSER__?: ComposerSession };
+  return (scope.__UNFEED_LI_COMPOSER__ = scope.__UNFEED_LI_COMPOSER__ ?? {
+    open: false,
+    since: 0,
+    sawEditor: false,
+    lastEditorAt: 0,
+    previousContext: undefined,
+  });
+}
+
+function setPageContext(value: unknown): void {
+  (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__ = value;
+}
+
+const trackComposer: HideSweep = (_settings, post) => {
+  const state = composerSession();
+  const path = location.pathname.toLowerCase().replace(/\/?$/, '/');
+  const onFeed = path === '/feed/';
+  if (onFeed && new URLSearchParams(location.search).has('shareActive') && !state.open) {
+    state.open = true;
+    state.since = Date.now();
+    state.sawEditor = false;
+    state.previousContext = (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__;
+    setPageContext('composer');
+    post({ type: 'li-composer', open: true });
+  }
+  if (!state.open) return;
+  const close = (backToMessages: boolean): void => {
+    state.open = false;
+    setPageContext(state.previousContext);
+    post({ type: 'li-composer', open: false });
+    if (backToMessages) window.location.replace(new URL('/messaging/', location.origin).href);
+  };
+  if (!onFeed) {
+    // Moved on (a posted update, a profile): that page has its own rule.
+    close(false);
+    return;
+  }
+  const now = Date.now();
+  if (document.querySelector(COMPOSER_EDITOR)) {
+    state.sawEditor = true;
+    state.lastEditorAt = now;
+    return;
+  }
+  const waited = now - (state.sawEditor ? state.lastEditorAt : state.since);
+  if (waited > (state.sawEditor ? COMPOSER_GONE_MS : COMPOSER_NEVER_SHOWED_MS)) close(true);
+};
+
 /** LinkedIn shows the own profile at /in/me/ without moving to the vanity
  * URL (checked 15 Oct 2026), so the QR code cannot wait for a route. Only
  * the own profile carries edit links, and they hold the vanity. */
@@ -172,6 +306,7 @@ setupInject('linkedin', {
     hideCountTexts,
     hideHomeItem,
     hideFeedBehindComposer,
+    trackComposer,
     detectOwnProfile,
   ],
   unread: true,
