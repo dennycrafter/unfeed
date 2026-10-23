@@ -93,3 +93,23 @@ export function IconGear({ color = colors.muted, size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+/** The Link button: two linked rounded loops. */
+export function IconLink({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l3.1-3.1a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-3.1 3.1a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}

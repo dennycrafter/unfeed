@@ -9,6 +9,7 @@ export type PageMessage =
   | { type: 'ig-username'; value: string }
   | { type: 'ig-create-missing' }
   | { type: 'li-own-profile'; url: string }
+  | { type: 'li-composer'; open: boolean }
   | { type: 'hide-stats'; matched: Record<string, number> };
 
 export function isPageMessage(value: unknown): value is PageMessage {
@@ -20,6 +21,7 @@ export function isPageMessage(value: unknown): value is PageMessage {
   if (record.type === 'ig-username') return typeof record.value === 'string' && record.value.length > 0;
   if (record.type === 'ig-create-missing') return true;
   if (record.type === 'li-own-profile') return typeof record.url === 'string' && record.url.length > 0;
+  if (record.type === 'li-composer') return typeof record.open === 'boolean';
   if (record.type === 'hide-stats') {
     return (
       typeof record.matched === 'object' &&

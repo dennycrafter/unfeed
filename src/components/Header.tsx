@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   row: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 8 },
-  side: { width: 72, alignItems: 'center' },
+  // Room for two 40px buttons (Link and Settings, QR and Post).
+  side: { width: 80, alignItems: 'center' },
   center: { flex: 1, alignItems: 'center' },
 });

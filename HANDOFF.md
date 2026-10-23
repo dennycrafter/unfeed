@@ -1,6 +1,6 @@
 # Unfeed Handoff
 
-Updated 15 Oct 2026. A new Claude chat should read this first, then `AGENTS.md`, then pick up from "What's next".
+Updated 23 Oct 2026. A new Claude chat should read this first, then `AGENTS.md`, then pick up from "What's next".
 
 ## What it is
 An iPhone app that opens Instagram and LinkedIn with the feeds removed. Built for me (Denis), so I can message people without getting sucked into scrolling.
@@ -40,6 +40,14 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
   - Instagram bar is now Search, DMs, **Post**, Profile. Post presses Instagram's own hidden New post control (ASSUMPTIONS 26). Not yet confirmed on my phone.
   - LinkedIn uses **its own** top and bottom bars, with Home and every feed link hidden. Notifications and My Network are allowed. Unfeed's LinkedIn bottom bar is gone (the old Search bar and recent searches code is unused now, kept until I say it can go). QR moved to the header's left button, with a Close button.
   - QR "My code" was empty because LinkedIn no longer moves /in/me/ to my real profile URL. The app now reads it from the edit links on my own profile (ASSUMPTIONS 28), and the empty state points to Settings to type it in.
+
+- 23 Oct: Expo Go on the App Store moved to SDK 58 and stopped opening the app, so the project moved to SDK 58 (PR #16).
+- 23 Oct: my phone feedback (sent through Grok), built while I was away, see ASSUMPTIONS 30 to 34. Not yet checked on my phone:
+  - DM videos: sound plays even on silent, videos stay in the page instead of flipping to full screen.
+  - Stories button: shows only the story circles, never the feed.
+  - Link button in the header: paste an Instagram or LinkedIn link and it opens here.
+  - LinkedIn get the app banner and pop-up are hidden or closed.
+  - Posting: Instagram Post shows a small sheet with "Choose photo or video"; LinkedIn has a Post button next to QR.
 
 ## Known limits (not bugs)
 - **It runs inside Expo Go, not as its own app.** A standalone app with its own icon needs a paid Apple developer account ($99 a year), which I don't have.

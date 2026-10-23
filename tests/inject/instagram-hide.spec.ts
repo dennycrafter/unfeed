@@ -29,7 +29,7 @@ type PageMessageRecord = Record<string, unknown>;
 async function openFixture(
   page: Page,
   path: string,
-  native: { context?: string; settings?: Record<string, unknown> } = {},
+  native: { context?: string; settings?: Record<string, unknown>; fixture?: string } = {},
 ): Promise<void> {
   await page.addInitScript(() => {
     const store: PageMessageRecord[] = [];
@@ -52,7 +52,7 @@ async function openFixture(
   await page.addInitScript(INSTAGRAM_INJECT_SCRIPT);
   await page.route('https://www.instagram.com/**', (route) => {
     const { pathname } = new URL(route.request().url());
-    const fixture = FIXTURE_ROUTES[pathname];
+    const fixture = pathname === new URL(path, 'https://www.instagram.com').pathname && native.fixture ? native.fixture : FIXTURE_ROUTES[pathname];
     if (fixture) return route.fulfill({ path: join(FIXTURES, fixture), contentType: 'text/html' });
     // Placeholder for assets so layout stays deterministic and no network is
     // touched; the sized img attributes keep the anchors measurable.
@@ -86,6 +86,29 @@ test('home fixture: feed hidden, stories tray visible, own nav hidden', async ({
   await expect(page.locator('article', { hasText: 'Feed post two' })).toBeHidden();
   await expect(page.locator('[aria-label="Suggested for you"]')).toBeHidden();
   await expect(page.locator('nav[aria-label="Primary"]')).toBeHidden();
+});
+
+test('stories button: tray and feed in one wrapper, only the tray shows', async ({ page }) => {
+  await openFixture(page, '/', { context: 'stories', fixture: 'instagram-home-nested.html' });
+  await expect(page.locator('[aria-label="Story by alice, not seen"]')).toBeVisible();
+  await expect(page.locator('[aria-label="Your story"]')).toBeVisible();
+  await expect(page.locator('.feed-post').first()).toBeHidden();
+  await expect(page.locator('.feed-post').nth(1)).toBeHidden();
+  await expect(page.locator('#unfeed-stories-note')).toHaveCount(0);
+});
+
+test('stories button: a home page with no stories says so instead of showing the feed', async ({ page }) => {
+  await page.clock.install();
+  await openFixture(page, '/', { context: 'stories', fixture: 'instagram-post.html' });
+  await expect(page.locator('main').first()).toBeHidden();
+  await page.clock.runFor(9000);
+  await expect(page.locator('#unfeed-stories-note')).toBeVisible();
+});
+
+test('videos are kept inline so iOS never takes them full screen', async ({ page }) => {
+  await openFixture(page, '/', { context: 'stories', fixture: 'instagram-home-nested.html' });
+  await expect(page.locator('video.feed-video')).toHaveAttribute('playsinline', '');
+  await expect(page.locator('video.feed-video')).toHaveAttribute('webkit-playsinline', '');
 });
 
 test('home fixture: unread count and username are reported', async ({ page }) => {
@@ -137,11 +160,26 @@ test('profile fixture: the Use the app sheet hides', async ({ page }) => {
   await expect(page.locator('.profile-username')).toBeVisible();
 });
 
-test('the Post hook presses the hidden New post control', async ({ page }) => {
+test('the Post hook shows a sheet whose button presses the hidden New post control', async ({ page }) => {
   await openFixture(page, '/yourprofile/');
   await expect(page.locator('div.bar')).toBeHidden();
   await page.evaluate(() => (window as unknown as { __UNFEED_CREATE__: () => void }).__UNFEED_CREATE__());
+  // iOS needs a real tap inside the page to open the photo picker, so the
+  // control is pressed from the sheet, never straight from native.
+  expect(await page.evaluate(() => (window as unknown as { __createPressed?: boolean }).__createPressed)).toBeFalsy();
+  const sheet = page.getByRole('dialog', { name: 'New post' });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Choose photo or video' }).click();
   expect(await page.evaluate(() => (window as unknown as { __createPressed?: boolean }).__createPressed)).toBe(true);
+  await expect(sheet).toHaveCount(0);
+});
+
+test('the Post sheet can be cancelled', async ({ page }) => {
+  await openFixture(page, '/yourprofile/');
+  await page.evaluate(() => (window as unknown as { __UNFEED_CREATE__: () => void }).__UNFEED_CREATE__());
+  await page.getByRole('dialog', { name: 'New post' }).getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog', { name: 'New post' })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __createPressed?: boolean }).__createPressed)).toBeFalsy();
 });
 
 test('the Post hook reports a page without a New post control', async ({ page }) => {

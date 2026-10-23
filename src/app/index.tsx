@@ -11,11 +11,13 @@ import { router } from 'expo-router';
 import { AppSwitcher, type AppKey } from '@/components/AppSwitcher';
 import { BottomBar, type BottomTab } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
-import { IconAvatar, IconChat, IconGear, IconPlus, IconQr, IconSearch, IconStories } from '@/components/icons';
+import { IconAvatar, IconChat, IconGear, IconLink, IconPlus, IconQr, IconSearch, IconStories } from '@/components/icons';
+import { LinkSheet } from '@/components/LinkSheet';
 import { Toast } from '@/components/Toast';
 import { InstagramHost, INSTAGRAM_HOME_URL, INSTAGRAM_LOGOUT_URL, INSTAGRAM_ROOT_URL, type InstagramHostHandle } from '@/hosts/InstagramHost';
 import { LinkedInHost } from '@/hosts/LinkedInHost';
 import type { PageMessage } from '@/inject/protocol';
+import type { PastedLink } from '@/link/pastedLink';
 import { tickHaptic } from '@/state/haptics';
 import { getStoreState, updateSettings, useStoreState } from '@/state/store';
 import { colors } from '@/theme/tokens';
@@ -113,6 +115,29 @@ function QrButton({ onPress, active }: { onPress: () => void; active: boolean })
   );
 }
 
+function LinkButton({ onPress, active }: { onPress: () => void; active: boolean }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open a link"
+      accessibilityState={{ selected: active }}
+      style={styles.headerButton}
+    >
+      <IconLink color={active ? colors.silver : colors.muted} />
+    </TouchableOpacity>
+  );
+}
+
+/** LinkedIn's Post button: opens LinkedIn's own post composer. */
+function LinkedInPostButton({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} accessibilityRole="button" accessibilityLabel="New LinkedIn post" style={styles.headerButton}>
+      <IconPlus color={colors.muted} />
+    </TouchableOpacity>
+  );
+}
+
 function SettingsButton({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity
@@ -139,6 +164,10 @@ export default function Index() {
   const [scannedUrl, setScannedUrl] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Paste a link and the LinkedIn Post button (Denis, 23 Oct 2026).
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkedInOpen, setLinkedInOpen] = useState<{ url: string; id: number } | null>(null);
+  const [composeSignal, setComposeSignal] = useState(0);
   const hostRef = useRef<InstagramHostHandle | null>(null);
   const postAttemptRef = useRef<PostAttempt>('idle');
 
@@ -232,6 +261,26 @@ export default function Index() {
     setScannedUrl(url);
     setActiveApp('instagram');
   }, []);
+
+  // A pasted link opens in its own app: Instagram like a scanned link (no
+  // feed around it), LinkedIn in its page.
+  const openPastedLink = useCallback(
+    (link: Exclude<PastedLink, { kind: 'none' }>): void => {
+      setLinkOpen(false);
+      setQrOpen(false);
+      if (link.kind === 'linkedin') {
+        setActiveApp('linkedin');
+        setLinkedInOpen((current) => ({ url: link.url, id: (current?.id ?? 0) + 1 }));
+        return;
+      }
+      setStories(null);
+      setActiveApp('instagram');
+      // The same link again would not reload through the source prop.
+      if (scannedUrl === link.url) hostRef.current?.runScript(`window.location.assign(${JSON.stringify(link.url)})`);
+      setScannedUrl(link.url);
+    },
+    [scannedUrl],
+  );
 
   // The page reported the username (section 8.5): the profile tab opens it
   // and the settings screen shows it (auto-detected, editable, charter 6).
@@ -360,11 +409,24 @@ export default function Index() {
           activeApp === 'instagram' ? (
             <StoriesButton onPress={openStories} active={stories !== null} />
           ) : (
-            <QrButton onPress={() => setQrOpen((open) => !open)} active={qrOpen} />
+            <View style={styles.headerPair}>
+              <QrButton onPress={() => setQrOpen((open) => !open)} active={qrOpen} />
+              <LinkedInPostButton
+                onPress={() => {
+                  tickHaptic(settings.haptics);
+                  setComposeSignal((signal) => signal + 1);
+                }}
+              />
+            </View>
           )
         }
         center={<AppSwitcher active={activeApp} unread={unread} onSelect={handleSelectApp} />}
-        right={<SettingsButton onPress={() => router.push('/settings')} />}
+        right={
+          <View style={styles.headerPair}>
+            <LinkButton onPress={() => setLinkOpen((open) => !open)} active={linkOpen} />
+            <SettingsButton onPress={() => router.push('/settings')} />
+          </View>
+        }
       />
       <View style={[styles.hostArea, activeApp !== 'instagram' && styles.hidden]} testID="host-instagram">
         {hydrated ? (
@@ -393,9 +455,12 @@ export default function Index() {
             onProfileVanityDetected={handleProfileVanityDetected}
             onOpenInstagramUrl={openInstagramUrl}
             onOpenSettings={() => router.push('/settings')}
+            composeSignal={composeSignal}
+            openRequest={linkedInOpen}
           />
         ) : null}
       </View>
+      {linkOpen ? <LinkSheet onOpen={openPastedLink} onClose={() => setLinkOpen(false)} /> : null}
     </View>
   );
 }
@@ -405,4 +470,5 @@ const styles = StyleSheet.create({
   hostArea: { flex: 1 },
   hidden: { display: 'none' },
   headerButton: { padding: 8 },
+  headerPair: { flexDirection: 'row', alignItems: 'center' },
 });

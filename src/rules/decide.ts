@@ -90,6 +90,9 @@ function hostMatches(host: string, pattern: string): boolean {
 function ruleMatches(rule: RouteRule, path: string, context: string, url: URL): boolean {
   const query = rule.match.query;
   if (query && !query.every((key) => url.searchParams.has(key))) return false;
+  // A context limited row only answers for that tab or session (Instagram's
+  // stories home, LinkedIn's open post composer).
+  if (rule.match.kind !== 'home' && rule.match.context !== undefined && context !== rule.match.context) return false;
   switch (rule.match.kind) {
     case 'prefix':
       return (rule.match.paths ?? []).some((prefix) => path.startsWith(prefix));
