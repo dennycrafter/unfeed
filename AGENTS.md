@@ -10,7 +10,7 @@ Expo ships breaking changes every SDK release. APIs you remember are likely rena
 2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
 3. For anything else, fetch https://docs.expo.dev/llms.txt, an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
 
-This project is pinned to Expo SDK 57 because that is what Expo Go on the App Store runs. Do not upgrade the SDK without re-checking the Expo Go changelog; a mismatched SDK fails to open in Expo Go with a version error.
+This project is on Expo SDK 58 because that is what Expo Go on the App Store runs (moved from 57 on 23 Oct 2026). Only change the SDK when the App Store Expo Go changes; a mismatched SDK fails to open in Expo Go with a version error.
 
 ## The one rule that matters: one source of truth for blocking
 

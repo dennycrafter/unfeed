@@ -102,19 +102,19 @@ beforeEach(async () => {
 
 test('both hosts stay mounted across app switches', async () => {
   await hydrateSettings();
-  const { getByTestId, getByLabelText } = render(<Shell />);
+  const { getByTestId, getByLabelText } = await render(<Shell />);
   expect(getByTestId('webview-instagram', anyVisibility)).toBeTruthy();
   expect(getByTestId('webview-linkedin', anyVisibility)).toBeTruthy();
   expect(isHidden(getByTestId('host-instagram', anyVisibility))).toBe(false);
   expect(isHidden(getByTestId('host-linkedin', anyVisibility))).toBe(true);
 
-  fireEvent.press(getByLabelText('LinkedIn'));
+  await fireEvent.press(getByLabelText('LinkedIn'));
   expect(getByTestId('webview-instagram', anyVisibility)).toBeTruthy();
   expect(getByTestId('webview-linkedin', anyVisibility)).toBeTruthy();
   expect(isHidden(getByTestId('host-instagram', anyVisibility))).toBe(true);
   expect(isHidden(getByTestId('host-linkedin', anyVisibility))).toBe(false);
 
-  fireEvent.press(getByLabelText('Instagram'));
+  await fireEvent.press(getByLabelText('Instagram'));
   expect(getByTestId('webview-instagram', anyVisibility)).toBeTruthy();
   expect(getByTestId('webview-linkedin', anyVisibility)).toBeTruthy();
   expect(isHidden(getByTestId('host-instagram', anyVisibility))).toBe(false);
@@ -123,8 +123,8 @@ test('both hosts stay mounted across app switches', async () => {
 
 test('switching apps saves lastApp for the next launch', async () => {
   await hydrateSettings();
-  const { getByLabelText } = render(<Shell />);
-  fireEvent.press(getByLabelText('LinkedIn'));
+  const { getByLabelText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
   await waitFor(async () => expect((await storedSettings()).lastApp).toBe('linkedin'));
 });
 
@@ -134,7 +134,7 @@ test('the next launch opens the app that was last used', async () => {
     JSON.stringify({ ...DEFAULT_SETTINGS, lastApp: 'linkedin' }),
   );
   await hydrateSettings();
-  const { getByTestId } = render(<Shell />);
+  const { getByTestId } = await render(<Shell />);
   expect(isHidden(getByTestId('host-instagram', anyVisibility))).toBe(true);
   expect(isHidden(getByTestId('host-linkedin', anyVisibility))).toBe(false);
 });
@@ -142,8 +142,8 @@ test('the next launch opens the app that was last used', async () => {
 test('the Instagram Post button opens the create flow in the page, not a tab', async () => {
   await hydrateSettings();
   mockInjectJavaScript.mockClear();
-  const { getByLabelText } = render(<Shell />);
-  fireEvent.press(getByLabelText('Post tab'));
+  const { getByLabelText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Post tab'));
   expect(mockInjectJavaScript).toHaveBeenCalledWith('webview-instagram', expect.stringContaining('__UNFEED_CREATE__'));
   // DMs stays the active tab: Post is an action.
   expect(getByLabelText('DMs tab').props.accessibilityState).toEqual({ selected: true });
@@ -151,24 +151,24 @@ test('the Instagram Post button opens the create flow in the page, not a tab', a
 
 test('the header left button is Stories on Instagram and QR on LinkedIn', async () => {
   await hydrateSettings();
-  const { getByLabelText, queryByLabelText } = render(<Shell />);
+  const { getByLabelText, queryByLabelText } = await render(<Shell />);
   expect(getByLabelText('Stories')).toBeTruthy();
   expect(queryByLabelText('QR')).toBeNull();
 
-  fireEvent.press(getByLabelText('LinkedIn'));
+  await fireEvent.press(getByLabelText('LinkedIn'));
   expect(getByLabelText('QR')).toBeTruthy();
   expect(queryByLabelText('Stories')).toBeNull();
 });
 
 test('LinkedIn has no Unfeed bottom bar, and the QR panel opens and closes', async () => {
   await hydrateSettings();
-  const { getByLabelText, queryByLabelText } = render(<Shell />);
-  fireEvent.press(getByLabelText('LinkedIn'));
+  const { getByLabelText, queryByLabelText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
   expect(queryByLabelText('Messages tab')).toBeNull();
 
-  fireEvent.press(getByLabelText('QR'));
+  await fireEvent.press(getByLabelText('QR'));
   await waitFor(() => expect(getByLabelText('Close QR')).toBeTruthy());
-  fireEvent.press(getByLabelText('Close QR'));
+  await fireEvent.press(getByLabelText('Close QR'));
   await waitFor(() => expect(queryByLabelText('Close QR')).toBeNull());
 });
 
@@ -176,13 +176,13 @@ test('haptics follow the settings toggle', async () => {
   const Haptics = require('expo-haptics');
   // Haptics default to on (charter section 6): a switch tick fires.
   await hydrateSettings();
-  const { getByLabelText } = render(<Shell />);
-  fireEvent.press(getByLabelText('LinkedIn'));
+  const { getByLabelText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
   await waitFor(() => expect(Haptics.impactAsync).toHaveBeenCalled());
 
   // With the toggle off, switching stays silent.
   Haptics.impactAsync.mockClear();
   updateSettings({ haptics: false });
-  fireEvent.press(getByLabelText('Instagram'));
+  await fireEvent.press(getByLabelText('Instagram'));
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
 });

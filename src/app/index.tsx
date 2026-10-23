@@ -43,7 +43,7 @@ function initialUnread(): { instagram: number; linkedin: number } {
   // Web preview only: seed the unread dots from the URL so the screen tests
   // can capture the switcher with badges. Real counts arrive in page messages
   // (section 8.5), which the web placeholders never post.
-  if (Platform.OS !== 'web') return { instagram: 0, linkedin: 0 };
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return { instagram: 0, linkedin: 0 };
   const params = new URLSearchParams(window.location.search);
   const instagram = Number(params.get('unreadInstagram'));
   const linkedin = Number(params.get('unreadLinkedin'));

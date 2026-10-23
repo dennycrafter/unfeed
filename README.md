@@ -31,7 +31,7 @@ The phone still needs internet, the same as the real Instagram and LinkedIn apps
 After any change to the app, run this once on the PC in the project folder: npm run publish:phone
 Then close and reopen unfeed in Expo Go. It picks up the new version.
 
-The upload is marked for Expo Go SDK 57 (app.json, ios.runtimeVersion policy "sdkVersion"). Keep it that way: Expo Go only opens updates marked with its own SDK.
+The upload is marked for Expo Go SDK 58 (app.json, ios.runtimeVersion policy "sdkVersion"). Keep it that way: Expo Go only opens updates marked with its own SDK.
 
 ## Run it from the PC instead (for development)
 
@@ -146,9 +146,9 @@ To find anything else: the screens are in src/app/, and the components the shell
 
 ## Expo SDK this project uses
 
-This project uses Expo SDK 57.
+This project uses Expo SDK 58.
 
-Why: the Expo Go app on the Apple App Store was updated in September 2026 and now supports SDK 57 (App Store version 57.0.9, September 2, 2026). SDK 58 exists only as a beta. So SDK 57 is the newest SDK that the Expo Go app from the App Store can run. Checked October 10, 2026. Expo Go can only run one SDK version at a time, so keep this project on SDK 57 until you deliberately upgrade.
+Why: on October 23, 2026 Expo Go on the App Store moved to SDK 58 and refused to open the SDK 57 version ("Project is incompatible with this version of Expo Go"). Expo Go can only run one SDK version at a time, and iPhones can only install the newest Expo Go, so this project follows whatever SDK the App Store Expo Go runs.
 
 ## Commands
 

@@ -16,8 +16,8 @@ An iPhone app that opens Instagram and LinkedIn with the feeds removed. Built fo
 Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hackathon. I ran out of Obvious credits, so work continues in Claude. All the code is in this repo.
 
 ## Stack
-- Expo SDK 57 (React Native, TypeScript, Expo Router).
-- Pinned to SDK 57 because that's what the App Store's Expo Go runs. Do not upgrade.
+- Expo SDK 58 (React Native, TypeScript, Expo Router).
+- On SDK 58 because that's what the App Store's Expo Go runs (moved from 57 on 23 Oct 2026, when Expo Go stopped opening 57). Only change it when Expo Go changes.
 - Runs inside the **Expo Go** app. It's not on the App Store.
 - One source of truth for blocking: `src/rules/*.json` plus `src/rules/decide.ts`. The app, the injected scripts and the userscripts all use it. Details are in `AGENTS.md`.
 
@@ -32,7 +32,7 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 - 15 Oct: Expo released new SDK 57 patch versions, which made CI's `expo-doctor` check fail. PR #12 bumped expo to ~57.0.30 plus the matching patches. CI is green again. Still SDK 57.
 - `BLOCKERS.md` is empty.
 - **Ignore branch `stretch/s1`** (Instagram "My code" QR). I never asked for it, so don't merge it.
-- 15 Oct: the app now runs without my PC. It is linked to my Expo account (`denispopov`, project `@denispopov/unfeed`) and published with EAS Update on branch `main`, runtime `exposdk:57.0.0` so Expo Go can open it. `expo-updates` was added for this. Publish a new version with `npm run publish:phone`. README "Get it on your iPhone (no PC needed)" has the phone steps.
+- 15 Oct: the app now runs without my PC. It is linked to my Expo account (`denispopov`, project `@denispopov/unfeed`) and published with EAS Update on branch `main`, runtime `exposdk:58.0.0` (was 57 until 23 Oct) so Expo Go can open it. `expo-updates` was added for this. Publish a new version with `npm run publish:phone`. README "Get it on your iPhone (no PC needed)" has the phone steps.
 - On Windows, 2 userscript unit tests and expo-doctor's `ios.icon` check fail locally because of CRLF line endings and the `.icon` folder. They pass in CI on Linux, which is the source of truth.
 - 15 Oct (PR #14): hidden frames (Facebook login sync, trackers) no longer open Safari. Only a link I tap to another site goes to Safari.
 - 16 Oct: my phone test feedback, built while I was away:
@@ -43,7 +43,7 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 
 ## Known limits (not bugs)
 - **It runs inside Expo Go, not as its own app.** A standalone app with its own icon needs a paid Apple developer account ($99 a year), which I don't have.
-- **Keep the update runtime on `sdkVersion`.** Expo Go only opens updates marked `exposdk:57.0.0`. Moving to SDK 58 later means Expo Go on the App Store must support it first.
+- **Keep the update runtime on `sdkVersion`.** Expo Go only opens updates marked with its own SDK (`exposdk:58.0.0` now). The next SDK move happens when the App Store Expo Go moves.
 - No push notifications from either site.
 - Some voice notes or media may not play inside the web views.
 - Google and Facebook login buttons often fail inside the app. Use username and password instead.
@@ -60,7 +60,7 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 4. **Check the 16 Oct changes on my phone:** Instagram bars and banner gone, Post opens the create screen, LinkedIn shows its own bars without Home, QR My code fills in after opening my own profile once.
 
 ## Rules for working on this
-- Read `AGENTS.md` before touching code. Expo changes a lot, so check the SDK 57 docs instead of relying on memory.
+- Read `AGENTS.md` before touching code. Expo changes a lot, so check the SDK 58 docs instead of relying on memory.
 - Change blocking only through `src/rules/` and `src/inject/`, then run `npm run build:inject`. Never hand-edit generated files.
 - Before calling anything done, run `npm test`, `npm run test:inject`, `npm run typecheck` and `npm run lint`.
 - One branch and one PR per change, squash merge when green.
