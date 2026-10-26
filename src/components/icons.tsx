@@ -113,3 +113,18 @@ export function IconLink({ color = colors.muted, size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+/** The Notifications tab: a plain bell. */
+export function IconBell({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <Path d="M10 20.5a2.2 2.2 0 0 0 4 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}

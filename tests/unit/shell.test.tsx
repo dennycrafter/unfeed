@@ -111,6 +111,17 @@ beforeEach(async () => {
   await AsyncStorage.clear();
 });
 
+// Stories (Denis, 25 Oct 2026): the Stories button shows native circles read
+// by a hidden web view. Instagram home never loads in the visible one.
+function postFromPage(webview: unknown, message: Record<string, unknown>): Promise<void> {
+  return fireEvent(webview as never, 'message', { nativeEvent: { data: JSON.stringify(message) } });
+}
+
+function visibleInstagram(getAllByTestId: (id: string, options?: object) => { props: { accessibilityHint?: string } }[]) {
+  return getAllByTestId('webview-instagram', anyVisibility)[0];
+}
+
+
 test('both hosts stay mounted across app switches', async () => {
   await hydrateSettings();
   const { getByTestId, getByLabelText } = await render(<Shell />);
@@ -160,23 +171,70 @@ test('the Instagram Post button opens the create flow in the page, not a tab', a
   expect(getByLabelText('DMs tab').props.accessibilityState).toEqual({ selected: true });
 });
 
-test('the header left button is Stories on Instagram and QR on LinkedIn', async () => {
+// The app's own bars (Denis, 25 Oct 2026): the same top bar on both apps,
+// Instagram tabs Stories, DMs, Search, Post, Profile and LinkedIn tabs
+// Profile, Messages, Search, Post, Notifications.
+test('both apps share one top bar: Link and Settings, plus QR on LinkedIn', async () => {
   await hydrateSettings();
   const { getByLabelText, queryByLabelText } = await render(<Shell />);
-  expect(getByLabelText('Stories')).toBeTruthy();
+  expect(getByLabelText('Open a link')).toBeTruthy();
+  expect(getByLabelText('Settings')).toBeTruthy();
   expect(queryByLabelText('QR')).toBeNull();
 
   await fireEvent.press(getByLabelText('LinkedIn'));
   expect(getByLabelText('QR')).toBeTruthy();
-  expect(queryByLabelText('Stories')).toBeNull();
+  expect(getByLabelText('Open a link')).toBeTruthy();
+  expect(getByLabelText('Settings')).toBeTruthy();
 });
 
-test('LinkedIn has no Unfeed bottom bar, and the QR panel opens and closes', async () => {
+test('Instagram tabs are Stories, DMs, Search, Post, Profile in that order', async () => {
+  await hydrateSettings();
+  const { getAllByRole } = await render(<Shell />);
+  const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
+  expect(labels).toEqual(['Instagram', 'LinkedIn', 'Stories tab', 'DMs tab', 'Search tab', 'Post tab', 'Profile tab']);
+});
+
+test('LinkedIn tabs are Profile, Messages, Search, Post, Notifications, Profile at the bottom left', async () => {
+  await hydrateSettings();
+  const { getAllByRole, getByLabelText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
+  const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
+  expect(labels).toEqual(['Instagram', 'LinkedIn', 'Profile tab', 'Messages tab', 'Search tab', 'Post tab', 'Notifications tab']);
+  expect(getByLabelText('Messages tab').props.accessibilityState).toEqual({ selected: true });
+});
+
+test('LinkedIn tabs steer the page and each tab keeps its place', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
+  expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/messaging/');
+  // Open a thread on Messages, then visit Notifications and come back.
+  await postFromPage(getByTestId('webview-linkedin'), { type: 'route', url: 'https://www.linkedin.com/messaging/thread/2-abc/' });
+  await fireEvent.press(getByLabelText('Notifications tab'));
+  expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/notifications/');
+  await fireEvent.press(getByLabelText('Profile tab'));
+  expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/in/me/');
+  await fireEvent.press(getByLabelText('Messages tab'));
+  expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/messaging/thread/2-abc/');
+});
+
+test('LinkedIn Search shows a native search box, and a search opens people results', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
+  await fireEvent.press(getByLabelText('Search tab'));
+  expect(getByText('Search for people by name. Posts never show here.')).toBeTruthy();
+  await fireEvent.changeText(getByLabelText('Search people'), 'ada lovelace');
+  await fireEvent(getByLabelText('Search people'), 'submitEditing');
+  await waitFor(() =>
+    expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/search/results/people/?keywords=ada%20lovelace'),
+  );
+});
+
+test('the QR panel opens from the top bar on LinkedIn and closes', async () => {
   await hydrateSettings();
   const { getByLabelText, queryByLabelText } = await render(<Shell />);
   await fireEvent.press(getByLabelText('LinkedIn'));
-  expect(queryByLabelText('Messages tab')).toBeNull();
-
   await fireEvent.press(getByLabelText('QR'));
   await waitFor(() => expect(getByLabelText('Close QR')).toBeTruthy());
   await fireEvent.press(getByLabelText('Close QR'));
@@ -242,30 +300,24 @@ test('text that is not a link Unfeed opens shows a short error and stays open', 
   expect(getByTestId('link-sheet')).toBeTruthy();
 });
 
-test('the LinkedIn Post button opens LinkedIn\'s own composer', async () => {
+test("LinkedIn's Post tab opens LinkedIn's own composer, then the tab comes back", async () => {
   await hydrateSettings();
   const { getByLabelText, getByTestId } = await render(<Shell />);
   await fireEvent.press(getByLabelText('LinkedIn'));
-  await fireEvent.press(getByLabelText('New LinkedIn post'));
+  await fireEvent.press(getByLabelText('Post tab'));
   await waitFor(() =>
     expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/feed/?shareActive=true'),
   );
+  // Post is an action: Messages stays the active tab.
+  expect(getByLabelText('Messages tab').props.accessibilityState).toEqual({ selected: true });
+  await postFromPage(getByTestId('webview-linkedin'), { type: 'li-composer', open: false });
+  expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/messaging/');
 });
-
-// Stories (Denis, 25 Oct 2026): the Stories button shows native circles read
-// by a hidden web view. Instagram home never loads in the visible one.
-function postFromPage(webview: unknown, message: Record<string, unknown>): Promise<void> {
-  return fireEvent(webview as never, 'message', { nativeEvent: { data: JSON.stringify(message) } });
-}
-
-function visibleInstagram(getAllByTestId: (id: string, options?: object) => { props: { accessibilityHint?: string } }[]) {
-  return getAllByTestId('webview-instagram', anyVisibility)[0];
-}
 
 test('Stories shows the native stories screen; home loads only in the hidden reader', async () => {
   await hydrateSettings();
   const { getByLabelText, getByTestId, getAllByTestId, getByText } = await render(<Shell />);
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   expect(getByTestId('stories-tray')).toBeTruthy();
   expect(getByText('Loading stories...')).toBeTruthy();
   const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
@@ -277,7 +329,7 @@ test('Stories shows the native stories screen; home loads only in the hidden rea
 test('the circles come from the hidden reader, and a tap opens that story in the visible web view', async () => {
   await hydrateSettings();
   const { getByLabelText, getByTestId, getAllByTestId, queryByTestId, getByText } = await render(<Shell />);
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
   await postFromPage(reader, {
     type: 'ig-stories',
@@ -304,7 +356,7 @@ test('the circles come from the hidden reader, and a tap opens that story in the
 test('an empty tray says so and never shows the page', async () => {
   await hydrateSettings();
   const { getByLabelText, getByTestId, getByText } = await render(<Shell />);
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
   await postFromPage(reader, { type: 'ig-stories', items: [], done: true });
   expect(getByText('No stories to show right now.')).toBeTruthy();
@@ -316,7 +368,7 @@ test('no answer from the hidden reader in time counts as an empty tray', async (
   try {
     await hydrateSettings();
     const { getByLabelText, getByText } = await render(<Shell />);
-    await fireEvent.press(getByLabelText('Stories'));
+    await fireEvent.press(getByLabelText('Stories tab'));
     expect(getByText('Loading stories...')).toBeTruthy();
     await act(async () => {
       jest.advanceTimersByTime(16000);
@@ -330,7 +382,7 @@ test('no answer from the hidden reader in time counts as an empty tray', async (
 test('a login page in the hidden reader asks to log in first', async () => {
   await hydrateSettings();
   const { getByLabelText, getByTestId, getByText } = await render(<Shell />);
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
   await postFromPage(reader, { type: 'route', url: 'https://www.instagram.com/accounts/login/?next=%2F' });
   expect(getByText(/Log in to Instagram first/)).toBeTruthy();
@@ -339,11 +391,11 @@ test('a login page in the hidden reader asks to log in first', async () => {
 test('pressing Stories again or a tab closes the stories screen', async () => {
   await hydrateSettings();
   const { getByLabelText, queryByTestId } = await render(<Shell />);
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   expect(queryByTestId('stories-tray')).toBeTruthy();
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   expect(queryByTestId('stories-tray')).toBeNull();
-  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Stories tab'));
   await fireEvent.press(getByLabelText('Search tab'));
   expect(queryByTestId('stories-tray')).toBeNull();
 });
