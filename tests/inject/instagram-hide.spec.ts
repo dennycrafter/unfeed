@@ -17,6 +17,7 @@ const FIXTURE_ROUTES: Record<string, string> = {
   '/p/abc123/': 'instagram-post.html',
   '/direct/inbox/': 'instagram-dm.html',
   '/yourprofile/': 'instagram-profile.html',
+  '/direct/t/videos/': 'instagram-videos.html',
 };
 
 type PageMessageRecord = Record<string, unknown>;
@@ -283,4 +284,79 @@ test('per rule match counts are exposed for the debug screen', async ({ page }) 
     .toBeGreaterThan(0);
   const matched = await latestStats();
   expect(matched['ig-own-nav']).toBeGreaterThan(0);
+});
+
+// Sound (Denis, 25 Oct 2026): Instagram's site starts every video muted.
+async function play(page: Page, id: string): Promise<void> {
+  await page.evaluate((videoId) => document.getElementById(videoId)?.dispatchEvent(new Event('play')), id);
+}
+
+async function videoState(page: Page, id: string): Promise<{ muted: boolean; volume: number }> {
+  return page.evaluate((videoId) => {
+    const video = document.getElementById(videoId) as HTMLVideoElement;
+    return { muted: video.muted, volume: video.volume };
+  }, id);
+}
+
+test("sound: a playing video is unmuted through Instagram's own sound button, once", async ({ page }) => {
+  await openFixture(page, '/direct/t/videos/', { context: 'dms' });
+  expect((await videoState(page, 'with-button')).muted).toBe(true);
+  await play(page, 'with-button');
+  await expect.poll(async () => (await videoState(page, 'with-button')).muted).toBe(false);
+  await expect(page.locator('svg[aria-label="Audio is playing"]')).toHaveCount(1);
+  expect(await page.evaluate(() => (window as unknown as { __sitePresses: number }).__sitePresses)).toBe(1);
+  // Playing again (a replay, a seek) never presses it a second time.
+  await play(page, 'with-button');
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => (window as unknown as { __sitePresses: number }).__sitePresses)).toBe(1);
+});
+
+test('sound: a video without a sound button is unmuted at full volume', async ({ page }) => {
+  await openFixture(page, '/direct/t/videos/', { context: 'dms' });
+  await page.evaluate(() => {
+    (document.getElementById('plain') as HTMLVideoElement).volume = 0.2;
+  });
+  await play(page, 'plain');
+  await expect.poll(() => videoState(page, 'plain')).toEqual({ muted: false, volume: 1 });
+  // The other video's button is never pressed for this one.
+  expect(await page.evaluate(() => (window as unknown as { __sitePresses: number }).__sitePresses)).toBe(0);
+});
+
+test('sound: once Denis taps a sound button himself, the app stops changing sound', async ({ page }) => {
+  await openFixture(page, '/direct/t/videos/', { context: 'dms' });
+  await play(page, 'with-button');
+  await expect.poll(async () => (await videoState(page, 'with-button')).muted).toBe(false);
+  await page.waitForTimeout(900);
+  // Denis mutes it with a real tap.
+  await page.locator('[aria-label="Toggle audio"]').click();
+  expect((await videoState(page, 'with-button')).muted).toBe(true);
+  await play(page, 'with-button');
+  await play(page, 'later');
+  await page.waitForTimeout(500);
+  expect((await videoState(page, 'with-button')).muted).toBe(true);
+  expect((await videoState(page, 'later')).muted).toBe(true);
+});
+
+test('sound: muting a video by other means also counts as his choice', async ({ page }) => {
+  await openFixture(page, '/direct/t/videos/', { context: 'dms' });
+  await play(page, 'plain');
+  await expect.poll(async () => (await videoState(page, 'plain')).muted).toBe(false);
+  await page.waitForTimeout(900);
+  await page.evaluate(() => {
+    (document.getElementById('plain') as HTMLVideoElement).muted = true;
+  });
+  await page.waitForTimeout(100);
+  await play(page, 'later');
+  await page.waitForTimeout(500);
+  expect((await videoState(page, 'later')).muted).toBe(true);
+});
+
+test('sound: the hidden stories tray reader never unmutes anything', async ({ page }) => {
+  await openFixture(page, '/direct/t/videos/', { context: 'stories-tray' });
+  await play(page, 'plain');
+  await play(page, 'with-button');
+  await page.waitForTimeout(500);
+  expect((await videoState(page, 'plain')).muted).toBe(true);
+  expect((await videoState(page, 'with-button')).muted).toBe(true);
+  expect(await page.evaluate(() => (window as unknown as { __sitePresses: number }).__sitePresses)).toBe(0);
 });

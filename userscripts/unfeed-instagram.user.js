@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed Instagram
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.4.0
+// @version 1.5.0
 // @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
 // @match https://instagram.com/*
 // @match https://www.instagram.com/*
@@ -861,6 +861,83 @@ a[href$="/following/"] {
   var silenceHiddenPage = () => {
     if (globalThis.__UNFEED_CONTEXT__ === "stories-tray") silenceVideos();
   };
+  var SOUND_OFF_LABEL = /^(audio is muted|audio muted|unmute|sound off|turn sound on|play sound)$/i;
+  var SOUND_CONTROL_LABEL = /^(audio is muted|audio muted|audio is playing|toggle audio|unmute|mute|sound off|sound on|turn sound on|turn sound off|play sound)$/i;
+  function ariaLabel(element) {
+    var _a;
+    return ((_a = element.getAttribute("aria-label")) != null ? _a : "").trim();
+  }
+  function press(element) {
+    if (element instanceof HTMLElement) element.click();
+    else element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  }
+  function soundOffButton(video) {
+    var _a;
+    let node = video.parentElement;
+    for (let hop = 0; node !== null && hop < 8; hop += 1) {
+      if (node.querySelectorAll("video").length > 1) return null;
+      for (const candidate of node.querySelectorAll("[aria-label]")) {
+        if (SOUND_OFF_LABEL.test(ariaLabel(candidate))) return (_a = candidate.closest('button, [role="button"]')) != null ? _a : candidate;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+  function unmute(video, state) {
+    state.ourChangeUntil = Date.now() + 800;
+    video.muted = false;
+    video.volume = 1;
+  }
+  function giveSound(video, state) {
+    state.given.add(video);
+    const button = soundOffButton(video);
+    if (!button) {
+      unmute(video, state);
+      return;
+    }
+    state.ourChangeUntil = Date.now() + 800;
+    press(button);
+    window.setTimeout(() => {
+      if (!state.userChose && video.muted) unmute(video, state);
+    }, 300);
+  }
+  function installVideoSound() {
+    if (typeof document === "undefined" || typeof document.addEventListener !== "function") return;
+    const state = { userChose: false, ourChangeUntil: 0, given: /* @__PURE__ */ new WeakSet() };
+    const hiddenReader = () => globalThis.__UNFEED_CONTEXT__ === "stories-tray";
+    document.addEventListener(
+      "play",
+      (event) => {
+        const video = event.target;
+        if (!(video instanceof HTMLVideoElement)) return;
+        if (hiddenReader()) {
+          silenceVideos();
+          return;
+        }
+        if (state.userChose || state.given.has(video)) return;
+        giveSound(video, state);
+      },
+      true
+    );
+    document.addEventListener(
+      "volumechange",
+      (event) => {
+        const video = event.target;
+        if (!(video instanceof HTMLVideoElement) || Date.now() < state.ourChangeUntil) return;
+        if (state.given.has(video) && (video.muted || video.volume === 0)) state.userChose = true;
+      },
+      true
+    );
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (!event.isTrusted || !(event.target instanceof Element)) return;
+        const control = event.target.closest("[aria-label]");
+        if (control && SOUND_CONTROL_LABEL.test(ariaLabel(control))) state.userChose = true;
+      },
+      true
+    );
+  }
   var CREATE_LABEL = /^(new post|create|new|post)$/i;
   function findCreateControl() {
     var _a;
@@ -916,6 +993,7 @@ a[href$="/following/"] {
     };
   }
   installCreateHook();
+  installVideoSound();
   watchStoriesTray();
   setupInject("instagram", {
     sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepVideosInline, silenceHiddenPage],
