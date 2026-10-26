@@ -8,10 +8,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
+import { Header } from '@/components/Header';
+import { IconBack } from '@/components/icons';
 import { Toast } from '@/components/Toast';
 import { formatBounceTime, shortBounceUrl, useBounces, type BounceEntry } from '@/state/bounceLog';
 import { requestSiteLogout, resetSettings, updateSettings, useSettings } from '@/state/store';
-import { colors, radius } from '@/theme/tokens';
+import { bars, colors, radius, space, type } from '@/theme/tokens';
 import type { Site } from '@/rules/decide';
 
 interface ConfirmSpec {
@@ -201,18 +203,25 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back to the app"
-          style={styles.backButton}
-        >
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
-        <View style={styles.backButton} />
-      </View>
+      {/* The same top bar as the app (Denis, 25 Oct 2026). */}
+      <Header
+        left={
+          <TouchableOpacity
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Back to the app"
+            style={styles.backButton}
+          >
+            <IconBack color={colors.silver} />
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
+        }
+        center={
+          <Text style={styles.title} accessibilityRole="header">
+            Settings
+          </Text>
+        }
+      />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <SectionLabel>Instagram</SectionLabel>
         <View style={styles.box}>
@@ -260,7 +269,9 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.box}>
-          <QuietButton label="Reset to defaults" danger onPress={askReset} />
+          <View style={styles.row}>
+            <QuietButton label="Reset to defaults" danger onPress={askReset} />
+          </View>
         </View>
 
         <Text style={styles.about}>
@@ -290,20 +301,10 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-    backgroundColor: 'rgba(11, 11, 13, 0.92)',
-  },
-  backButton: { minWidth: 64, paddingHorizontal: 8, paddingVertical: 8 },
-  backText: { color: colors.silver, fontSize: 15 },
-  title: { color: colors.fg, fontSize: 17, fontWeight: '700' },
+
+  backButton: { flexDirection: 'row', alignItems: 'center', height: bars.hit, paddingRight: space.sm },
+  backText: { color: colors.silver, fontSize: type.body },
+  title: { color: colors.fg, fontSize: type.title, fontWeight: '700' },
   scroll: { flex: 1 },
   content: { padding: 16, gap: 6, paddingBottom: 48 },
   sectionLabel: { color: colors.muted, fontSize: 12, marginTop: 12, marginBottom: 4, letterSpacing: 0.4 },

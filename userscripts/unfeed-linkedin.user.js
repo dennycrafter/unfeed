@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.7.0
+// @version 1.8.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*

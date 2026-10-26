@@ -32,7 +32,7 @@ test.describe('instagram screens at phone size', () => {
 
   test('Stories button opens the native stories screen, never Instagram home', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Stories' }).click();
+    await page.getByRole('tab', { name: 'Stories tab' }).click();
     await expect(page.getByTestId('stories-tray')).toBeVisible();
     await expect(page.getByText('Loading stories...')).toBeVisible();
     await page.screenshot({ path: screenshot('t2-instagram-stories-loading.png') });

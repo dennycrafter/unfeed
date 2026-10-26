@@ -128,3 +128,12 @@ export function IconBell({ color = colors.muted, size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+/** Back: a plain chevron pointing left. */
+export function IconBack({ color = colors.muted, size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M14.5 5.5 8 12l6.5 6.5" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
