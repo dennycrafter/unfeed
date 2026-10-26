@@ -33,18 +33,38 @@ export const INSTAGRAM_DECIDE_TABLE: DecideRow[] = [
   // Stories (rule 3)
   { name: 'a friend story allowed', url: 'https://www.instagram.com/stories/someuser/123/', expected: ALLOW },
   { name: 'stories root allowed', url: 'https://www.instagram.com/stories/', expected: ALLOW },
-  // Reels feed (rule 8)
+  // Reels feed (rule 8). A single reel opened under /reels/ goes to its own
+  // page, /reel/<code>/, which is not a feed (Denis, 25 Oct 2026).
   { name: 'reels root redirects to DMs', url: 'https://www.instagram.com/reels/', expected: toInbox },
-  { name: 'reels channel redirects to DMs', url: 'https://www.instagram.com/reels/abc/', expected: toInbox },
+  { name: 'a single reel under reels opens its own page', url: 'https://www.instagram.com/reels/abc/', expected: { action: 'redirect', to: '/reel/abc/' } },
+  { name: 'a single reel under reels keeps the code case', url: 'https://www.instagram.com/reels/CxYz_9-A/', expected: { action: 'redirect', to: '/reel/CxYz_9-A/' } },
+  { name: 'a single reel under reels without a slash keeps the code', url: 'https://www.instagram.com/reels/CxYz', expected: { action: 'redirect', to: '/reel/CxYz/' } },
   { name: 'reels path in upper case redirects', url: 'https://www.instagram.com/REELS/', expected: toInbox },
-  // Single shared posts (rule 9), setting on and off
-  { name: 'reel allowed when shared posts on', url: 'https://www.instagram.com/reel/abc/', allowSharedPosts: true, expected: ALLOW },
-  { name: 'reel redirects when shared posts off', url: 'https://www.instagram.com/reel/abc/', allowSharedPosts: false, expected: toInbox },
-  { name: 'post allowed when shared posts on', url: 'https://www.instagram.com/p/abc/', allowSharedPosts: true, expected: ALLOW },
-  { name: 'post redirects when shared posts off', url: 'https://www.instagram.com/p/abc/', allowSharedPosts: false, expected: toInbox },
-  { name: 'igtv allowed when shared posts on', url: 'https://www.instagram.com/tv/abc/', allowSharedPosts: true, expected: ALLOW },
-  { name: 'igtv redirects when shared posts off', url: 'https://www.instagram.com/tv/abc/', allowSharedPosts: false, expected: toInbox },
-  { name: 'reel query string is ignored', url: 'https://www.instagram.com/reel/abc/?igsh=xyz', allowSharedPosts: true, expected: ALLOW },
+  { name: 'reels audio page redirects to DMs', url: 'https://www.instagram.com/reels/audio/123/', expected: toInbox },
+  // Single posts and reels (rule 9): always allowed, they are not a feed
+  // (Denis, 25 Oct 2026). Your activity is full of them.
+  { name: 'reel allowed', url: 'https://www.instagram.com/reel/abc/', expected: ALLOW },
+  { name: 'reel allowed with shared posts off', url: 'https://www.instagram.com/reel/abc/', allowSharedPosts: false, expected: ALLOW },
+  { name: 'post allowed', url: 'https://www.instagram.com/p/abc/', expected: ALLOW },
+  { name: 'post allowed with shared posts off', url: 'https://www.instagram.com/p/abc/', allowSharedPosts: false, expected: ALLOW },
+  { name: 'igtv allowed', url: 'https://www.instagram.com/tv/abc/', expected: ALLOW },
+  { name: 'igtv allowed with shared posts off', url: 'https://www.instagram.com/tv/abc/', allowSharedPosts: false, expected: ALLOW },
+  { name: 'reel query string is ignored', url: 'https://www.instagram.com/reel/abc/?igsh=xyz', expected: ALLOW },
+  { name: 'a post opened from the stories context allowed', url: 'https://www.instagram.com/p/abc/', context: 'stories', expected: ALLOW },
+  // Your activity and settings pages (Denis, 25 Oct 2026)
+  { name: 'your activity allowed', url: 'https://www.instagram.com/your_activity/', expected: ALLOW },
+  { name: 'your activity likes allowed', url: 'https://www.instagram.com/your_activity/interactions/likes/', expected: ALLOW },
+  { name: 'your activity comments allowed', url: 'https://www.instagram.com/your_activity/interactions/comments/', expected: ALLOW },
+  { name: 'your activity time spent allowed', url: 'https://www.instagram.com/your_activity/time_spent/', expected: ALLOW },
+  { name: 'account settings allowed', url: 'https://www.instagram.com/accounts/settings/', expected: ALLOW },
+  { name: 'edit profile allowed', url: 'https://www.instagram.com/accounts/edit/', expected: ALLOW },
+  { name: 'privacy and security allowed', url: 'https://www.instagram.com/accounts/privacy_and_security/', expected: ALLOW },
+  { name: 'notification settings allowed', url: 'https://www.instagram.com/push/web/settings/', expected: ALLOW },
+  { name: 'email settings allowed', url: 'https://www.instagram.com/emails/settings/', expected: ALLOW },
+  { name: 'login activity allowed', url: 'https://www.instagram.com/session/login_activity/', expected: ALLOW },
+  { name: 'story archive allowed', url: 'https://www.instagram.com/archive/stories/', expected: ALLOW },
+  { name: 'saved posts allowed', url: 'https://www.instagram.com/someuser/saved/', expected: ALLOW },
+  { name: 'the accounts center settings allowed', url: 'https://accountscenter.instagram.com/personal_info/', expected: ALLOW },
   { name: 'deep post path falls through to allow', url: 'https://www.instagram.com/p/abc/xyz/', expected: ALLOW },
   // Explore (rules 6 and 7)
   { name: 'explore root redirects to search', url: 'https://www.instagram.com/explore/', expected: toSearch },

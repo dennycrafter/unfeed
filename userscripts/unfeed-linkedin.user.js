@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.1.0
+// @version 1.2.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*
@@ -53,13 +53,15 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
       { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
       { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },
-      { id: "ig-8-reels", match: { kind: "prefix", paths: ["/reels/"] }, action: "redirect", to: "/direct/inbox/" },
       {
-        id: "ig-9-shared-post",
-        match: { kind: "singleSegmentPrefix", prefixes: ["/reel/", "/p/", "/tv/"] },
-        action: "allowIfSharedPosts",
-        to: "/direct/inbox/"
+        id: "ig-8-single-reel",
+        match: { kind: "singleSegmentPrefix", prefixes: ["/reels/"] },
+        action: "redirect",
+        to: "/reel/",
+        keepRest: true
       },
+      { id: "ig-8-reels", match: { kind: "prefix", paths: ["/reels/"] }, action: "redirect", to: "/direct/inbox/" },
+      { id: "ig-9-single-post", match: { kind: "singleSegmentPrefix", prefixes: ["/reel/", "/p/", "/tv/"] }, action: "allow" },
       { id: "ig-10-profile", match: { kind: "username" }, action: "allow" },
       { id: "ig-11-fallback", match: { kind: "any" }, action: "allow" }
     ]
@@ -104,12 +106,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         match: { kind: "exact", paths: ["/feed/"], context: "composer" },
         action: "allow"
       },
-      {
-        id: "li-8-shared-post",
-        match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
-        action: "allowIfSharedPosts",
-        to: "/messaging/"
-      },
+      { id: "li-8-single-post", match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] }, action: "allow" },
       { id: "li-9-feed", match: { kind: "prefix", paths: ["/feed/"] }, action: "redirect", to: "/messaging/" },
       { id: "li-9-home", match: { kind: "home" }, action: "redirect", to: "/messaging/" },
       {
@@ -226,6 +223,12 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         if (!isStringArray(record.keepQuery)) fail(site, `rule ${id} keepQuery must be strings`);
         keepQuery = record.keepQuery;
       }
+      if (record.keepRest !== void 0) {
+        if (record.keepRest !== true) fail(site, `rule ${id} keepRest must be true when present`);
+        if (match.kind !== "singleSegmentPrefix" || action !== "redirect" || !String(record.to).endsWith("/")) {
+          fail(site, `rule ${id} keepRest needs a singleSegmentPrefix redirect whose to ends with /`);
+        }
+      }
       return {
         id,
         match: {
@@ -237,7 +240,8 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         },
         action,
         to,
-        keepQuery
+        keepQuery,
+        keepRest: record.keepRest === true ? true : void 0
       };
     });
     if (!rules.some((rule) => rule.match.kind === "any")) fail(site, "rules must include an any fallback");
@@ -250,9 +254,14 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       rules
     };
   }
-  function redirectWithQuery(rule, url) {
-    var _a;
-    const to = (_a = rule.to) != null ? _a : "/";
+  function redirectWithQuery(rule, url, path) {
+    var _a, _b;
+    let to = (_a = rule.to) != null ? _a : "/";
+    if (rule.keepRest) {
+      const prefix = ((_b = rule.match.prefixes) != null ? _b : []).find((candidate) => path.startsWith(candidate));
+      const typed = url.pathname.replace(/\/{2,}/g, "/");
+      if (prefix) to += (typed.endsWith("/") ? typed : `${typed}/`).slice(prefix.length);
+    }
     if (!rule.keepQuery || rule.keepQuery.length === 0) {
       return { action: "redirect", to, rule: rule.id };
     }
@@ -297,8 +306,8 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
     for (const rule of rules.rules) {
       if (!ruleMatches(rule, path, context, url)) continue;
       if (rule.action === "allow") return { action: "allow", rule: rule.id };
-      if (rule.action === "redirect") return redirectWithQuery(rule, url);
-      return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url);
+      if (rule.action === "redirect") return redirectWithQuery(rule, url, path);
+      return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url, path);
     }
     return { action: "allow", rule: "unmatched-fallback" };
   }

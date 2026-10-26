@@ -38,10 +38,11 @@ test('all settings rows render with their values', async () => {
     JSON.stringify({ ...DEFAULT_SETTINGS, igUsername: 'denis' }),
   );
   await hydrateSettings();
-  const { getByText, getByDisplayValue } = await render(<SettingsScreen />);
+  const { getByText, getByDisplayValue, queryByText } = await render(<SettingsScreen />);
   expect(getByText('Instagram username')).toBeTruthy();
   expect(getByText('LinkedIn profile link')).toBeTruthy();
-  expect(getByText("Open friends' shared posts")).toBeTruthy();
+  // Single posts always open now, so the shared posts switch is gone.
+  expect(queryByText("Open friends' shared posts")).toBeNull();
   expect(getByText('Hide like and follower counts')).toBeTruthy();
   expect(getByText('Haptics')).toBeTruthy();
   expect(getByText('Reset to defaults')).toBeTruthy();

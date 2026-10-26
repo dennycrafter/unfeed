@@ -135,11 +135,15 @@ test('post fixture: post visible, More posts and Suggested hidden', async ({ pag
   await expect(page.locator('[aria-label="Suggested for you"]')).toBeHidden();
 });
 
-test('dm fixture: thread untouched, reels link and banner hidden', async ({ page }) => {
+test('dm fixture: thread untouched, Reels tab link and banner hidden, shared reels and posts stay', async ({ page }) => {
   await openFixture(page, '/direct/inbox/');
   await expect(page.locator('main[aria-label="Conversation"]')).toBeVisible();
   await expect(page.locator('[aria-label="Message from alice"]').first()).toBeVisible();
-  await expect(page.locator('a[href="/reels/abc123/"]')).toBeHidden();
+  await expect(page.locator('nav a[href="/reels/"]')).toBeHidden();
+  // Single reels and posts a friend sends are not a feed (Denis, 25 Oct 2026).
+  await expect(page.locator('a[href="/reels/abc123/"]')).toBeVisible();
+  await expect(page.locator('a[href="/reel/Xyz789/"]')).toBeVisible();
+  await expect(page.locator('a[href="/p/Post456/"]')).toBeVisible();
   await expect(page.locator('aside.hashed-app-banner')).toBeHidden();
   await waitForMessage(page, { type: 'unread', count: 2 });
 });
@@ -196,14 +200,28 @@ test('route message is posted on pushState', async ({ page }) => {
   await waitForMessage(page, { type: 'route', url: 'https://www.instagram.com/explore/search/' });
 });
 
-test('in page guard redirects a reels push under a declared context', async ({ page }) => {
+test('in page guard redirects a reels tab push under a declared context', async ({ page }) => {
   await openFixture(page, '/direct/inbox/', { context: 'dms' });
   await page.evaluate(() => {
-    history.pushState({}, '', '/reels/abc/');
+    history.pushState({}, '', '/reels/');
   });
   // The page bounces itself to the inbox, which is served the dm fixture.
   await page.waitForURL('https://www.instagram.com/direct/inbox/');
   await expect(page.locator('main[aria-label="Conversation"]')).toBeVisible();
+});
+
+test('in page guard sends a single reel under reels to its own page, keeping the code', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  await page.evaluate(() => {
+    history.pushState({}, '', '/reels/CxYz9/');
+  });
+  await page.waitForURL('https://www.instagram.com/reel/CxYz9/');
+});
+
+test('in page guard leaves a single post alone even with shared posts off', async ({ page }) => {
+  await openFixture(page, '/p/abc123/', { context: 'dms', settings: { allowSharedPosts: false, hideCounts: false } });
+  await expect(page.locator('article', { hasText: 'A single post' })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/p/abc123/');
 });
 
 test('hideCounts setting hides follower and like counts on request', async ({ page }) => {
