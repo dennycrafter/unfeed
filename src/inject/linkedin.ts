@@ -232,7 +232,10 @@ function siteBarFor(anchor: Element): Element | null {
   let node = anchor.parentElement;
   for (let hop = 0; node !== null && hop < 10; hop += 1) {
     if (node === document.body || node.matches(PAGE_BODY) || node.querySelector(PAGE_BODY)) return null;
-    if (looksLikeBar(node) && sectionCount(node) >= 2) return node;
+    // A bar is bar sized: a pinned shell around the whole page never counts.
+    if (looksLikeBar(node) && sectionCount(node) >= 2) {
+      return node.getBoundingClientRect().height <= window.innerHeight * 0.3 ? node : null;
+    }
     node = node.parentElement;
   }
   return null;

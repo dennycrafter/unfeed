@@ -276,3 +276,12 @@ test('theme: the page gets the app colours through LinkedIn variables only', asy
   // The body itself is never forced dark, so unknown text colours stay readable.
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 });
+
+test('own bars: a pinned full screen shell is the page, not a bar, and stays', async ({ page }) => {
+  await routeFixture(page, 'linkedin-app-shell.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/messaging/');
+  await expect(page.locator('div.tabbar')).toBeHidden();
+  await expect(page.getByText('Lunch on Friday?')).toBeVisible();
+  await expect(page.locator('div.shell')).toBeVisible();
+});

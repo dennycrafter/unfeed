@@ -701,7 +701,9 @@ textarea {
     let node = anchor.parentElement;
     for (let hop = 0; node !== null && hop < 10; hop += 1) {
       if (node === document.body || node.matches(PAGE_BODY) || node.querySelector(PAGE_BODY)) return null;
-      if (looksLikeBar(node) && sectionCount(node) >= 2) return node;
+      if (looksLikeBar(node) && sectionCount(node) >= 2) {
+        return node.getBoundingClientRect().height <= window.innerHeight * 0.3 ? node : null;
+      }
       node = node.parentElement;
     }
     return null;
