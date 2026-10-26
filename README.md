@@ -6,9 +6,11 @@ Instagram and LinkedIn with no feed. Unfeed opens the real mobile websites of In
 
 One app, two services, no feeds:
 
-- Instagram: opens straight to your DMs. Unfeed's own bar has Stories, DMs, Search, Post and Profile; Instagram's own bars and "get the app" banners are hidden. Stories shows Unfeed's own row of story circles, never the home page. Single posts and reels always open. The home feed, the Reels tab and the Explore grid are blocked.
+- Instagram: opens straight to your DMs. Unfeed's own bar has Search, Post, DMs, Notifications and Profile, with DMs in the middle; Instagram's own bars and "get the app" banners are hidden. Friends' stories open from DMs or from their profile; there is no stories feed. Profiles show their posts, and single posts and reels always open. The home feed, the Reels tab and the Explore grid are blocked.
 - LinkedIn: opens straight to Messages. Unfeed's own bar has Profile, Messages, Search, Post and Notifications; LinkedIn's own bars and "get the app" banners are hidden. Single posts and Recent activity always open. The feed and post search results are blocked.
-- Both apps share the same top bar: Link (paste a link), QR on LinkedIn, the switcher, and the Settings gear.
+- The top bar: Link (paste a link) on Instagram, QR on LinkedIn, the switcher, and the Settings gear.
+- Each tab keeps its own page and scroll, and never reloads by itself.
+- The pages keep each site's own look: no colours or fonts are forced on them.
 - Settings lists the last 20 pages that were blocked, with the rule that did it, under "Blocked pages".
 - A switcher at the top moves between the two, and both stay logged in and keep their place.
 - On LinkedIn, the QR button at the top left scans other people's codes and shows yours.
@@ -31,8 +33,8 @@ The phone still needs internet, the same as the real Instagram and LinkedIn apps
 
 ### Sending a new version to the phone
 
-After any change to the app, run this once on the PC in the project folder: npm run publish:phone
-Then close and reopen unfeed in Expo Go. It picks up the new version.
+Every change merged into main is published to the phone by itself (GitHub Actions, "Publish to phone"), once the CI checks pass. It needs the EXPO_TOKEN secret in the repo settings. Then close and reopen unfeed in Expo Go. It picks up the new version.
+To publish by hand from the PC instead, run this once in the project folder: npm run publish:phone
 
 The upload is marked for Expo Go SDK 58 (app.json, ios.runtimeVersion policy "sdkVersion"). Keep it that way: Expo Go only opens updates marked with its own SDK.
 
@@ -119,10 +121,10 @@ If you changed anything in src/rules, src/inject or the CSS, run npm run build:i
 ```
 Phone (Expo Go)
  app shell (React Native, expo router)
-  top bar (same on both): Link, QR (LinkedIn), the switcher, settings gear
-  tab bar: Instagram (Stories, DMs, Search, Post, Profile) and LinkedIn
+  top bar: Link (Instagram), QR (LinkedIn), the switcher, settings gear
+  tab bar: Instagram (Search, Post, DMs, Notifications, Profile) and LinkedIn
            (Profile, Messages, Search, Post, Notifications)
-  stories screen: native story circles, read by a hidden web view on Instagram home
+  one web view per opened tab, kept while another tab shows
   Instagram host: one web view on instagram.com, never unloaded
   LinkedIn host: one web view on linkedin.com, never unloaded
   QR screen: camera scanner and your code

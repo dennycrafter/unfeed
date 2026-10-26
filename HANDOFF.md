@@ -5,9 +5,11 @@ Updated 26 Oct 2026. A new Claude chat should read this first, then `AGENTS.md`,
 ## What it is
 An iPhone app that opens Instagram and LinkedIn with the feeds removed. Built for me (Denis), so I can message people without getting sucked into scrolling.
 
-- **Instagram** opens straight to DMs. Tabs: Stories, DMs, Search, Post, Profile.
+- **Instagram** opens straight to DMs. Tabs: Search, Post, DMs, Notifications, Profile (DMs in the middle). No Stories tab: stories open from DMs or a profile.
 - **LinkedIn** opens to Messages. Tabs: Profile, Messages, Search, Post, Notifications.
-- **Top bar (both):** Link, QR (LinkedIn only), the app switcher, Settings.
+- **Top bar:** Link (Instagram only), QR (LinkedIn only), the app switcher, Settings.
+- **Tabs:** each tab has its own web view, made on first open and kept, so it keeps its page and scroll and never reloads by itself.
+- **Look:** the pages keep each site's own look. No forced colours or fonts (they broke LinkedIn Messages).
 - **Blocked:** only the feeds: Instagram home, the Reels tab and the Explore grid, and LinkedIn's home feed. Everything else works normally. They're stopped at the navigation level and also hidden with injected CSS as a backup.
 - **Switching:** a pill at the top flips between the two apps. Both keep their place.
 - **Settings:** a settings screen with a separate logout for each service.
@@ -62,6 +64,19 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
   - PR 27: the app's own top bar and tab bar on both apps, LinkedIn's own bars hidden (kept in the Safari userscript), page colours set through the sites' own colour variables, tighter tokens, Settings on the shared top bar, new screenshots.
   - Two updates were published: Part 1 only (update group `86d23975`), then Part 1 plus the new look (`9a7bb74d`, the current one). If I don't like the new look, the Part 1 only update can be put back.
 
+- 26 Oct: fixes from my first look at the overnight build (one PR, done in Claude chat, not yet on my phone until published):
+  - Stories tab and its hidden home reader removed (`ig-4-home-stories-tray` rule gone). Instagram tabs are Search, Post, DMs, Notifications (`/accounts/activity/`), Profile.
+  - Each tab, on both apps, has its own web view. Before, every page move was written back as the tab's address, which reloaded the page under me ("random refreshes") and could leave the Profile tab on DMs.
+  - Pull to refresh is off: scrolling up a DM thread kept reloading it.
+  - Redirects are not doubled any more: the page enforces its own moves and native only steps in if the page is still on the blocked address 0.9 s later.
+  - Home and feed redirects (`ig-5-home`, `ig-8-reels`, `li-9-feed`, `li-9-home`) go back to the tab's last allowed page, or the tab's start page, instead of DMs. A story that ends on a friend's profile returns there (`src/rules/returnRules.ts`).
+  - The Instagram username only comes from Instagram's own nav bar or from my own profile's Edit profile link. Before, the first avatar link on any page was taken, so Settings showed whoever's story I watched last. A wrong saved name is replaced as soon as the right one is seen.
+  - Post pages: the rule that hid everything after the first part of the page (which blanked some posts) is replaced by a sweep that hides only "More posts from" and suggestion sections.
+  - Forced page colours and fonts removed on both sites.
+  - Link button only on Instagram; LinkedIn's Post composer opens in its own web view over the tab.
+  - iOS dropping a background page now reloads it instead of leaving it blank.
+  - Auto publish: `.github/workflows/publish.yml` publishes an EAS Update to branch main after CI passes on main. Needs the `EXPO_TOKEN` repo secret (an access token from expo.dev); without it the job skips. `npm run publish:phone` still works by hand.
+
 ## Known limits (not bugs)
 - **It runs inside Expo Go, not as its own app.** A standalone app with its own icon needs a paid Apple developer account ($99 a year), which I don't have.
 - **Keep the update runtime on `sdkVersion`.** Expo Go only opens updates marked with its own SDK (`exposdk:58.0.0` now). The next SDK move happens when the App Store Expo Go moves.
@@ -70,7 +85,6 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 - Google and Facebook login buttons often fail inside the app. Use username and password instead.
 - Both sites change their pages often, so the hide rules may need updating over time (`AGENTS.md` explains how). If a page bounces, Settings > Blocked pages shows which rule did it.
 - Each tab remembers its page, but not how far down it was scrolled (still one web view per app).
-- How close the page colours get to the app's depends on the sites' own colour settings; only the phone can show it.
 
 ## What's next
 1. **Me, on my phone:** first-time setup and testing, following `DENIS_TODO.md` and README "Get it on your iPhone (no PC needed)":
@@ -81,7 +95,7 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
 2. **Fix whatever breaks** in step 1. Expect selector or route tweaks once it's running against the real sites.
 3. ~~Solve the "PC must be on" problem.~~ Done 15 Oct with EAS Update into Expo Go (see Status). After any code change, run `npm run publish:phone` so the phone gets it.
 4. **Check the 16 Oct changes on my phone:** Instagram bars and banner gone, Post opens the create screen, QR My code fills in after opening my own profile once.
-5. **Check the 25 Oct overnight build on my phone** with the checklist in `MORNING.md`, and say whether the new look is a keeper.
+5. **Check the 26 Oct fixes on my phone** once published: Profile tab, Settings username, posts from Your activity, profile grids, no random reloads, LinkedIn Messages readable. If anything bounces, screenshot Settings, Blocked pages.
 
 ## Rules for working on this
 - Read `AGENTS.md` before touching code. Expo changes a lot, so check the SDK 58 docs instead of relying on memory.

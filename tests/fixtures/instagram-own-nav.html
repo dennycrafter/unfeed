@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Username detection fixture (Denis, 26 Oct 2026): a DM style page whose
+     first avatar link is a friend's (a story ring in the page, then a friend
+     in a dialog), and whose own nav bar, a fixed div with svg labelled links
+     and no nav element, ends with the signed in profile avatar. Only the nav
+     one may become the username. Class names are fake hashes. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>(2) Inbox | Instagram</title>
+  </head>
+  <body>
+    <div class="x1n2onr6 shell">
+      <a class="x1i10hfl story-ring" href="/a_friend/" role="link"><img src="/friend.jpg" width="40" height="40" alt="a_friend's profile picture" /></a>
+      <main class="x78zum5 inbox" role="main">
+        <a class="x1i10hfl thread-avatar" href="/another_friend/" role="link"><img src="/another.jpg" width="40" height="40" alt="" /></a>
+        <span>Inbox</span>
+      </main>
+      <div class="xh8yej3 bar" style="position: fixed; bottom: 0; left: 0; right: 0; height: 48px">
+        <a class="x1i10hfl" href="/" role="link"><svg aria-label="Home" width="24" height="24"></svg></a>
+        <a class="x1i10hfl" href="/explore/" role="link"><svg aria-label="Explore" width="24" height="24"></svg></a>
+        <a class="x1i10hfl" href="/reels/" role="link"><svg aria-label="Reels" width="24" height="24"></svg></a>
+        <a class="x1i10hfl" href="/direct/inbox/" role="link"><svg aria-label="Messages" width="24" height="24"></svg></a>
+        <a class="x1i10hfl nav-profile" href="/real_denis/" role="link"><img src="/me.jpg" width="24" height="24" alt="real_denis's profile picture" /></a>
+      </div>
+    </div>
+  </body>
+</html>

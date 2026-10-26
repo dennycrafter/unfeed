@@ -49,7 +49,7 @@ main a[href^="/tv/"] {
   display: none !important;
 }
 
-/* @unfeed-rule ig-home-feed scope=home -- the home page never paints at all (Denis, 25 Oct 2026). It only loads in the hidden stories tray reader, which reads the tray from the page without showing it; anywhere else home is redirected away, and this keeps even that moment blank */
+/* @unfeed-rule ig-home-feed scope=home -- the home page never paints at all (Denis, 25 Oct 2026). Home is always redirected away; this keeps even that moment blank */
 html,
 html * {
   visibility: hidden !important;
@@ -57,17 +57,11 @@ html * {
 html,
 body {
   overflow: hidden !important;
-  background: #0b0b0d !important;
+  background: #000 !important;
 }
 article,
 section:has(a[href^="/explore/people/"]),
 div:has(> a[href^="/explore/people/"]) {
-  display: none !important;
-}
-
-/* @unfeed-rule ig-post-related scope=post-page -- More posts from, Suggested and related sections on permalinks */
-main > :not(:first-child),
-section:has(a[href^="/explore/people/"]) {
   display: none !important;
 }
 
@@ -89,30 +83,6 @@ a[href$="/liked-by/"],
 a[href$="/followers/"],
 a[href$="/following/"] {
   visibility: hidden !important;
-}
-
-/* @unfeed-rule ig-theme -- Unfeed's colours and font on the page (Denis, 25 Oct 2026). Only the site's own colour variables are set, so nothing can end up dark on dark if Instagram renames them; it then keeps its own dark mode */
-:root {
-  color-scheme: dark !important;
-  --ig-primary-background: 11, 11, 13 !important;
-  --ig-secondary-background: 18, 18, 21 !important;
-  --ig-elevated-background: 28, 28, 32 !important;
-  --ig-highlight-background: 28, 28, 32 !important;
-  --ig-banner-background: 18, 18, 21 !important;
-  --ig-primary-text: 242, 242, 244 !important;
-  --ig-secondary-text: 154, 154, 163 !important;
-  --ig-tertiary-text: 154, 154, 163 !important;
-  --ig-primary-icon: 242, 242, 244 !important;
-  --ig-secondary-icon: 154, 154, 163 !important;
-  --ig-separator: 42, 42, 48 !important;
-  --ig-elevated-separator: 42, 42, 48 !important;
-  --ig-stroke: 42, 42, 48 !important;
-}
-body,
-button,
-input,
-textarea {
-  font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif !important;
 }
 `;
 
@@ -197,7 +167,6 @@ textarea {
       },
       { id: "ig-2-direct", match: { kind: "prefix", paths: ["/direct/"] }, action: "allow" },
       { id: "ig-3-stories", match: { kind: "prefix", paths: ["/stories/"] }, action: "allow" },
-      { id: "ig-4-home-stories-tray", match: { kind: "home", context: "stories-tray" }, action: "allow" },
       { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
       { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
       { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },
@@ -460,6 +429,23 @@ textarea {
     return { action: "allow", rule: "unmatched-fallback" };
   }
 
+  // src/rules/returnRules.ts
+  var RETURN_RULES = /* @__PURE__ */ new Set(["ig-5-home", "ig-8-reels", "li-9-feed", "li-9-home"]);
+  function isReturnablePage(url) {
+    try {
+      const path = new URL(url).pathname.toLowerCase();
+      return !path.startsWith("/stories/") && path !== "/" && path !== "/feed/" && !path.startsWith("/accounts/login");
+    } catch {
+      return false;
+    }
+  }
+  function returnTarget(rule, ruleTarget, lastGood, homeUrl, blockedUrl) {
+    if (!rule || !RETURN_RULES.has(rule)) return ruleTarget;
+    if (lastGood && lastGood !== blockedUrl) return lastGood;
+    if (homeUrl && homeUrl !== blockedUrl) return homeUrl;
+    return ruleTarget;
+  }
+
   // src/inject/protocol.ts
   var DEFAULT_INJECT_SETTINGS = {
     allowSharedPosts: true,
@@ -475,7 +461,7 @@ textarea {
   }
 
   // src/inject/common.ts
-  var INJECT_VERSION = "t3.1";
+  var INJECT_VERSION = "t3.2";
   function createPoster(site) {
     return (message) => {
       try {
@@ -552,16 +538,41 @@ textarea {
       }
     };
   }
+  var LAST_GOOD_KEY = "unfeed-last-good";
+  function readLastGood() {
+    var _a, _b;
+    try {
+      return (_b = (_a = window.sessionStorage) == null ? void 0 : _a.getItem(LAST_GOOD_KEY)) != null ? _b : null;
+    } catch {
+      return null;
+    }
+  }
+  function saveLastGood(href) {
+    var _a;
+    try {
+      (_a = window.sessionStorage) == null ? void 0 : _a.setItem(LAST_GOOD_KEY, href);
+    } catch {
+    }
+  }
+  function declaredHome() {
+    const home = globalThis.__UNFEED_HOME__;
+    return typeof home === "string" && home ? home : null;
+  }
   function enforceRoute(site, settings, href, post) {
     var _a;
     try {
       const declared = globalThis.__UNFEED_CONTEXT__;
       const context = typeof declared === "string" && declared ? declared : "page";
       const result = decide(site, href, context, settings);
+      if (result.action === "allow") {
+        if (isReturnablePage(href)) saveLastGood(href);
+        return;
+      }
       if (result.action !== "redirect" || !result.to) return;
-      const target = new URL(result.to, location.origin).href;
+      const ruleTarget = new URL(result.to, location.origin).href;
+      const target = returnTarget(result.rule, ruleTarget, readLastGood(), declaredHome(), href);
       if (target === location.href) return;
-      post({ type: "bounce", url: href, rule: (_a = result.rule) != null ? _a : "unknown", to: result.to });
+      post({ type: "bounce", url: href, rule: (_a = result.rule) != null ? _a : "unknown", to: target === ruleTarget ? result.to : target });
       window.location.replace(target);
     } catch (error) {
       console.warn("[unfeed] in-page enforce failed", site, error);
@@ -696,28 +707,6 @@ textarea {
     }
     post({ type: "hide-stats", matched });
   };
-  var detectUsername = (_settings, post) => {
-    var _a, _b;
-    const scope = globalThis;
-    const state = scope.__UNFEED_IG__ = (_a = scope.__UNFEED_IG__) != null ? _a : {};
-    if (state.postedUsername) return;
-    for (const anchor of document.querySelectorAll("a[href]")) {
-      if (!(anchor instanceof HTMLAnchorElement)) continue;
-      let path = "";
-      try {
-        path = new URL((_b = anchor.getAttribute("href")) != null ? _b : "", location.origin).pathname;
-      } catch {
-        continue;
-      }
-      if (!/^\/[A-Za-z0-9._]+\/?$/.test(path)) continue;
-      if (path.startsWith("/explore") || path.startsWith("/reels")) continue;
-      if (!anchor.querySelector("img")) continue;
-      const value = path.replace(/\//g, "");
-      state.postedUsername = value;
-      post({ type: "ig-username", value });
-      return;
-    }
-  };
   var HIDDEN_ATTR = "data-unfeed-hidden";
   function hide(element) {
     if (element.getAttribute(HIDDEN_ATTR) === null) element.setAttribute(HIDDEN_ATTR, "");
@@ -778,6 +767,72 @@ textarea {
       if (bar) hide(bar);
     }
   };
+  var USERNAME = /^[A-Za-z0-9._]{1,30}$/;
+  var NOT_A_USERNAME = /* @__PURE__ */ new Set(["explore", "reels", "direct", "accounts", "stories", "p", "reel", "tv", "create", "notifications"]);
+  function usernameFromHref(href) {
+    let path = "";
+    try {
+      path = new URL(href, location.origin).pathname;
+    } catch {
+      return null;
+    }
+    const match = /^\/([A-Za-z0-9._]+)\/?$/.exec(path);
+    const value = match == null ? void 0 : match[1];
+    if (!value || !USERNAME.test(value) || NOT_A_USERNAME.has(value.toLowerCase())) return null;
+    return value;
+  }
+  function ownUsername() {
+    var _a;
+    for (const anchor of document.querySelectorAll("a[href]")) {
+      if (!anchor.querySelector("img")) continue;
+      if (anchor.closest('main, [role="main"], article, [role="dialog"]')) continue;
+      const value = usernameFromHref((_a = anchor.getAttribute("href")) != null ? _a : "");
+      if (!value) continue;
+      let node = anchor.parentElement;
+      for (let hop = 0; node !== null && hop < 6; hop += 1) {
+        if (holdsPageContent(node)) break;
+        if (navLinkCount(node) >= 2) return value;
+        node = node.parentElement;
+      }
+    }
+    if (document.querySelector('a[href="/accounts/edit/"], a[href^="/accounts/edit/?"]')) {
+      return usernameFromHref(location.href);
+    }
+    return null;
+  }
+  var detectUsername = (_settings, post) => {
+    var _a;
+    const scope = globalThis;
+    const state = scope.__UNFEED_IG__ = (_a = scope.__UNFEED_IG__) != null ? _a : {};
+    const value = ownUsername();
+    if (!value || state.postedUsername === value) return;
+    state.postedUsername = value;
+    post({ type: "ig-username", value });
+  };
+  var RELATED_HEADING = /^(more posts from\b|more from\b|suggested for you$|suggested posts$|related posts$|you might like$)/i;
+  var POST_CONTROLS = 'svg[aria-label="Like"], svg[aria-label="Unlike"], textarea, [aria-label="Comment"], form';
+  function hideRelatedFrom(heading) {
+    let target = null;
+    let node = heading;
+    for (let hop = 0; node !== null && hop < 10; hop += 1) {
+      const parent = node.parentElement;
+      if (parent === null || parent === document.body || parent.matches('main, [role="main"]')) break;
+      if (parent.querySelector(POST_CONTROLS)) break;
+      node = parent;
+      target = node;
+    }
+    if (target && !target.querySelector(POST_CONTROLS)) hide(target);
+  }
+  var hideRelatedPosts = () => {
+    var _a;
+    if (!pageScopes(location.pathname).includes("post-page")) return;
+    for (const heading of document.querySelectorAll("h1, h2, h3, h4, span, div")) {
+      if (heading.children.length > 1 || heading.closest(`[${HIDDEN_ATTR}]`)) continue;
+      const text = ((_a = heading.textContent) != null ? _a : "").trim();
+      if (text.length > 60 || !RELATED_HEADING.test(text)) continue;
+      hideRelatedFrom(heading);
+    }
+  };
   var OPEN_APP_PATTERN = /^(get the app|open app|open the app|use the app|open instagram|get instagram|download the app|switch to the app)$/i;
   function hideTightContainer(trigger) {
     var _a;
@@ -799,78 +854,6 @@ textarea {
     }
   };
   var KEEP_ATTR = "data-unfeed-keep";
-  var STORY_CONTROL = `[aria-label^="Story by" i], [aria-label$="'s story" i], [aria-label*="'s story," i], a[href^="/stories/"]`;
-  var USERNAME = /^[A-Za-z0-9._]{1,30}$/;
-  function storyUsername(control) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
-    const link = control.matches('a[href^="/stories/"]') ? control : control.querySelector('a[href^="/stories/"]');
-    const href = (_a = link == null ? void 0 : link.getAttribute("href")) != null ? _a : "";
-    const fromHref = (_b = /^\/stories\/([^/?#]+)/.exec(href)) == null ? void 0 : _b[1];
-    if (fromHref && fromHref !== "highlights" && USERNAME.test(fromHref)) return fromHref;
-    const label = ((_c = control.getAttribute("aria-label")) != null ? _c : "").trim();
-    const fromLabel = (_f = (_d = /^story by ([^,\s]+)/i.exec(label)) == null ? void 0 : _d[1]) != null ? _f : (_e = /^([^,\s]+)'s story/i.exec(label)) == null ? void 0 : _e[1];
-    if (fromLabel && USERNAME.test(fromLabel)) return fromLabel;
-    const alt = (_h = (_g = control.querySelector("img[alt]")) == null ? void 0 : _g.getAttribute("alt")) != null ? _h : "";
-    const fromAlt = (_i = /^([^,\s]+)'s profile picture/i.exec(alt)) == null ? void 0 : _i[1];
-    return fromAlt && USERNAME.test(fromAlt) ? fromAlt : null;
-  }
-  function storyAvatar(control) {
-    const image = control.querySelector("img");
-    if (!(image instanceof HTMLImageElement)) return null;
-    const source = image.currentSrc || image.getAttribute("src") || "";
-    try {
-      const url = new URL(source, location.origin);
-      return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
-    } catch {
-      return null;
-    }
-  }
-  function readStoryItems(root) {
-    const items = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const control of root.querySelectorAll(STORY_CONTROL)) {
-      if (control.closest("article")) continue;
-      const username = storyUsername(control);
-      if (!username || seen.has(username.toLowerCase())) continue;
-      seen.add(username.toLowerCase());
-      items.push({ username, avatar: storyAvatar(control) });
-    }
-    return items;
-  }
-  var TRAY_GIVE_UP_MS = 1e4;
-  function watchStoriesTray() {
-    const context = globalThis.__UNFEED_CONTEXT__;
-    if (context !== "stories-tray" || typeof document === "undefined") return;
-    const post = createPoster("instagram");
-    const started = Date.now();
-    let last = "";
-    const check = () => {
-      try {
-        silenceVideos();
-        if (!pageScopes(location.pathname).includes("home")) return;
-        const items = readStoryItems(document);
-        const done = items.length > 0 || Date.now() - started > TRAY_GIVE_UP_MS;
-        const key = JSON.stringify([items, done]);
-        if (key === last) return;
-        last = key;
-        post({ type: "ig-stories", items, done });
-      } catch (error) {
-        console.warn("[unfeed] stories tray read failed", error);
-      }
-    };
-    window.setInterval(check, 700);
-    let pending = false;
-    if (typeof MutationObserver !== "undefined") {
-      new MutationObserver(() => {
-        if (pending) return;
-        pending = true;
-        setTimeout(() => {
-          pending = false;
-          check();
-        }, 150);
-      }).observe(document, { childList: true, subtree: true });
-    }
-  }
   var keepVideosInline = () => {
     for (const video of document.querySelectorAll("video")) {
       if (video.getAttribute("playsinline") !== null) continue;
@@ -878,15 +861,6 @@ textarea {
       video.setAttribute("webkit-playsinline", "");
       video.playsInline = true;
     }
-  };
-  function silenceVideos() {
-    for (const video of document.querySelectorAll("video")) {
-      video.muted = true;
-      if (!video.paused) video.pause();
-    }
-  }
-  var silenceHiddenPage = () => {
-    if (globalThis.__UNFEED_CONTEXT__ === "stories-tray") silenceVideos();
   };
   var SOUND_OFF_LABEL = /^(audio is muted|audio muted|unmute|sound off|turn sound on|play sound)$/i;
   var SOUND_CONTROL_LABEL = /^(audio is muted|audio muted|audio is playing|toggle audio|unmute|mute|sound off|sound on|turn sound on|turn sound off|play sound)$/i;
@@ -931,16 +905,11 @@ textarea {
   function installVideoSound() {
     if (typeof document === "undefined" || typeof document.addEventListener !== "function") return;
     const state = { userChose: false, ourChangeUntil: 0, given: /* @__PURE__ */ new WeakSet() };
-    const hiddenReader = () => globalThis.__UNFEED_CONTEXT__ === "stories-tray";
     document.addEventListener(
       "play",
       (event) => {
         const video = event.target;
         if (!(video instanceof HTMLVideoElement)) return;
-        if (hiddenReader()) {
-          silenceVideos();
-          return;
-        }
         if (state.userChose || state.given.has(video)) return;
         giveSound(video, state);
       },
@@ -1021,9 +990,8 @@ textarea {
   }
   installCreateHook();
   installVideoSound();
-  watchStoriesTray();
   setupInject("instagram", {
-    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepVideosInline, silenceHiddenPage],
+    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, hideRelatedPosts, keepVideosInline],
     unread: true,
     enforce: true
   });

@@ -1,9 +1,9 @@
 // Charter T2 acceptance: the generated Instagram script run in a real
-// browser against fixture pages. After injection the feed articles, grid,
-// More posts section, Instagram's own nav, reels links and app banners are
-// hidden, the stories tray, search box, post and DM thread stay visible,
-// routes are reported on pushState, unread counts and the username arrive,
-// and the in page guard redirects a feed push once native confirms the tab.
+// browser against fixture pages. After injection the feed, grid, More posts
+// section, Instagram's own nav, reels links and app banners are hidden, the
+// search box, post and DM thread stay visible, routes are reported on
+// pushState, unread counts and the own username arrive, and the in page
+// guard redirects a feed push, returning to the tab's last page for home.
 
 import { expect, test, type Page } from '@playwright/test';
 import { join } from 'node:path';
@@ -77,53 +77,10 @@ async function messages(page: Page): Promise<PageMessageRecord[]> {
   );
 }
 
-test('home in the hidden tray reader: nothing on the page is visible, the tray is posted to native', async ({ page }) => {
-  // Home only loads in the hidden stories tray reader (Denis, 25 Oct 2026).
-  await openFixture(page, '/', { context: 'stories-tray' });
-  await waitForMessage(page, { type: 'route', url: 'https://www.instagram.com/' });
-  await waitForMessage(page, {
-    type: 'ig-stories',
-    items: [
-      { username: 'alice', avatar: 'https://www.instagram.com/alice.jpg' },
-      { username: 'bob', avatar: 'https://www.instagram.com/bob.jpg' },
-      { username: 'cara', avatar: 'https://www.instagram.com/cara.jpg' },
-    ],
-    done: true,
-  });
-  // Not a single part of home paints, the tray included: native draws its own.
-  await expect(page.locator('[aria-label="Stories tray"]')).toBeHidden();
-  await expect(page.locator('article', { hasText: 'Feed post one' })).toBeHidden();
-  await expect(page.locator('article', { hasText: 'Feed post two' })).toBeHidden();
-  await expect(page.locator('[aria-label="Suggested for you"]')).toBeHidden();
-  await expect(page.locator('nav[aria-label="Primary"]')).toBeHidden();
-  expect(await page.evaluate(() => getComputedStyle(document.body).visibility)).toBe('hidden');
-});
-
-test('tray reader: labels with seen states and Your story, tray and feed in one wrapper', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories-tray', fixture: 'instagram-home-nested.html' });
-  await waitForMessage(page, {
-    type: 'ig-stories',
-    items: [
-      { username: 'alice', avatar: null },
-      { username: 'bob', avatar: null },
-    ],
-    done: true,
-  });
-  await expect(page.locator('.feed-post').first()).toBeHidden();
-  await expect(page.locator('[aria-label="Story by alice, not seen"]')).toBeHidden();
-});
-
-test('tray reader: a home page with no stories reports an empty tray, never the feed', async ({ page }) => {
-  await page.clock.install();
-  await openFixture(page, '/', { context: 'stories-tray', fixture: 'instagram-post.html' });
-  await expect(page.locator('main').first()).toBeHidden();
-  await page.clock.runFor(11000);
-  await waitForMessage(page, { type: 'ig-stories', items: [], done: true });
-});
-
-test('watching stories: a move to home is sent away and the page stays blank meanwhile', async ({ page }) => {
-  await openFixture(page, '/direct/inbox/', { context: 'stories' });
-  // The story viewer closing pushes home; the feed must not paint for a frame.
+// No stories tray (Denis, 26 Oct 2026): home is redirected in every tab and
+// never paints while it happens.
+test('home never paints, in any tab, and is sent away', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
   const blankAtPush = await page.evaluate(() => {
     history.pushState({}, '', '/');
     return getComputedStyle(document.body).visibility;
@@ -132,26 +89,51 @@ test('watching stories: a move to home is sent away and the page stays blank mea
   await page.waitForURL('https://www.instagram.com/direct/inbox/');
 });
 
-test('the tray reader never runs in the visible web view', async ({ page }) => {
-  await openFixture(page, '/direct/inbox/', { context: 'dms' });
-  await page.waitForTimeout(1000);
+test('the old stories tray context no longer lets home load', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'stories-tray' });
+  await page.evaluate(() => history.pushState({}, '', '/'));
+  await page.waitForURL('https://www.instagram.com/direct/inbox/');
   const types = (await messages(page)).map((message) => message.type);
   expect(types).not.toContain('ig-stories');
 });
 
-test('videos are kept inline so iOS never takes them full screen', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories-tray', fixture: 'instagram-home-nested.html' });
-  await expect(page.locator('video.feed-video')).toHaveAttribute('playsinline', '');
-  await expect(page.locator('video.feed-video')).toHaveAttribute('webkit-playsinline', '');
+// Home and feed redirects go back (Denis, 26 Oct 2026): a story that ends on
+// a friend's profile returns there instead of jumping to DMs.
+test('a story ending returns to the last page of the tab, not DMs', async ({ page }) => {
+  await openFixture(page, '/yourprofile/', { context: 'profile' });
+  await waitForMessage(page, { type: 'route', url: 'https://www.instagram.com/yourprofile/' });
+  await page.evaluate(() => {
+    history.pushState({}, '', '/stories/yourprofile/123/');
+    history.pushState({}, '', '/');
+  });
+  await page.waitForURL('https://www.instagram.com/yourprofile/');
 });
 
-test('home fixture: unread count and username are reported', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories-tray' });
-  await waitForMessage(page, { type: 'unread', count: 3 });
+test('videos are kept inline so iOS never takes them full screen', async ({ page }) => {
+  await openFixture(page, '/direct/t/videos/', { context: 'dms' });
+  await expect(page.locator('#plain')).toHaveAttribute('playsinline', '');
+  await expect(page.locator('#plain')).toHaveAttribute('webkit-playsinline', '');
+});
+
+test('unread count and the own username come from the nav bar', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms', fixture: 'instagram-own-nav.html' });
+  await waitForMessage(page, { type: 'unread', count: 2 });
+  await waitForMessage(page, { type: 'ig-username', value: 'real_denis' });
+  // A friend's avatar (a story ring, a thread) is never taken for Denis.
+  const names = (await messages(page)).filter((message) => message.type === 'ig-username').map((message) => message.value);
+  expect(names).toEqual(['real_denis']);
+});
+
+test('the own profile page gives the username through its Edit profile link', async ({ page }) => {
+  await openFixture(page, '/yourprofile/', { context: 'profile', fixture: 'instagram-own-profile-edit.html' });
   await waitForMessage(page, { type: 'ig-username', value: 'yourprofile' });
+});
+
+test('a page without the nav bar never reports a username', async ({ page }) => {
+  await openFixture(page, '/p/abc123/');
+  await page.waitForTimeout(800);
   const types = (await messages(page)).map((message) => message.type);
-  expect(types).toContain('unread');
-  expect(types).toContain('ig-username');
+  expect(types).not.toContain('ig-username');
 });
 
 test('search fixture: search input visible, grid links hidden', async ({ page }) => {
@@ -269,7 +251,7 @@ test('hideCounts setting hides follower and like counts on request', async ({ pa
 });
 
 test('per rule match counts are exposed for the debug screen', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories-tray' });
+  await openFixture(page, '/explore/search/', { context: 'search' });
   await waitForMessage(page, { type: 'hide-stats' });
   // Stats posted at document-start see an empty page; wait until the
   // observer tick after the first rendered frame reports real counts.
@@ -280,10 +262,10 @@ test('per rule match counts are exposed for the debug screen', async ({ page }) 
     return matched && typeof matched === 'object' ? (matched as Record<string, number>) : {};
   };
   await expect
-    .poll(async () => (await latestStats())['ig-home-feed'] ?? 0, { timeout: 10_000 })
+    .poll(async () => (await latestStats())['ig-explore-grid'] ?? 0, { timeout: 10_000 })
     .toBeGreaterThan(0);
   const matched = await latestStats();
-  expect(matched['ig-own-nav']).toBeGreaterThan(0);
+  expect(matched['ig-home-feed']).toBe(0);
 });
 
 // Sound (Denis, 25 Oct 2026): Instagram's site starts every video muted.
@@ -349,16 +331,6 @@ test('sound: muting a video by other means also counts as his choice', async ({ 
   await play(page, 'later');
   await page.waitForTimeout(500);
   expect((await videoState(page, 'later')).muted).toBe(true);
-});
-
-test('sound: the hidden stories tray reader never unmutes anything', async ({ page }) => {
-  await openFixture(page, '/direct/t/videos/', { context: 'stories-tray' });
-  await play(page, 'plain');
-  await play(page, 'with-button');
-  await page.waitForTimeout(500);
-  expect((await videoState(page, 'plain')).muted).toBe(true);
-  expect((await videoState(page, 'with-button')).muted).toBe(true);
-  expect(await page.evaluate(() => (window as unknown as { __sitePresses: number }).__sitePresses)).toBe(0);
 });
 
 test('the in-page guard reports each bounce with its rule for Blocked pages', async ({ page }) => {

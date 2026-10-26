@@ -1,0 +1,50 @@
+name: Publish to phone
+
+# Every change merged into main goes to Denis's phone by itself (26 Oct 2026):
+# once the CI checks pass on main, this publishes an EAS Update on branch
+# main, the same as `npm run publish:phone` on the PC. Expo Go picks it up on
+# the next full reopen. Needs the EXPO_TOKEN repository secret; without it
+# the job skips quietly instead of failing.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-phone
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Skip without an Expo token
+        if: env.EXPO_TOKEN == ''
+        run: echo "No EXPO_TOKEN secret yet, so nothing was published. Add it in the repo settings to turn this on."
+
+      - uses: actions/checkout@v4
+        if: env.EXPO_TOKEN != ''
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        if: env.EXPO_TOKEN != ''
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: env.EXPO_TOKEN != ''
+        run: npm ci
+
+      - name: Publish the update to the phone
+        if: env.EXPO_TOKEN != ''
+        env:
+          COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message || 'Manual publish' }}
+        run: npx eas-cli@latest update --branch main --environment production --platform ios --non-interactive --message "$(printf '%s' "$COMMIT_MESSAGE" | head -n 1)"

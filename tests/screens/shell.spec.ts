@@ -44,13 +44,13 @@ test('the link pop-up says when the text is not a link it opens', async ({ page 
   await page.screenshot({ path: join('docs', 'screenshots', 't7-link-sheet-error.png') });
 });
 
-test('both apps share one top bar: QR and Link on the left on LinkedIn, Settings on the right', async ({ page }) => {
+test('the top bar: Link on Instagram, QR on LinkedIn, Settings on the right of both', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open a link' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
   await page.screenshot({ path: join('docs', 'screenshots', 't7-instagram-header.png') });
   await page.getByRole('tab', { name: 'LinkedIn' }).click();
   await expect(page.getByRole('button', { name: 'QR' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open a link' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open a link' })).toHaveCount(0);
   await page.screenshot({ path: join('docs', 'screenshots', 't7-linkedin-header.png') });
 });

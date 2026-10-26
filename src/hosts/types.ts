@@ -21,6 +21,9 @@ export interface WebViewHostProps {
   url: string;
   /** Which native tab is asking, for example dms or stories. */
   context: string;
+  /** The tab's own start page: where a home or feed redirect returns to
+   * when the tab has no earlier page (src/rules/returnRules.ts). */
+  homeUrl?: string | null;
   settings: DecideSettings;
   /** Hide like, view, follower and connection counts on the page. */
   hideCounts?: boolean;
@@ -50,4 +53,6 @@ export interface WebViewHostApi {
   /** Switches the route guard's context at once, before the next render,
    * for a session the page announces (LinkedIn's open post composer). */
   setContext(context: string): void;
+  /** Opens an address in this page, even the one it already shows. */
+  open(url: string): void;
 }
