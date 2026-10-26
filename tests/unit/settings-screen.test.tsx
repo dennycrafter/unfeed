@@ -84,3 +84,30 @@ test('logging out asks first and then raises the request', async () => {
   await waitFor(() => expect(getStoreState().logout?.site).toBe('instagram'));
   expect(getByText('Signing out of Instagram. Log back in with your username and password.')).toBeTruthy();
 });
+
+// Blocked pages (Denis, 25 Oct 2026): the bounce log at the bottom.
+test('Blocked pages says nothing was blocked yet when the log is empty', async () => {
+  const { resetBouncesForTest } = require('../../src/state/bounceLog') as typeof import('../../src/state/bounceLog');
+  resetBouncesForTest();
+  await hydrateSettings();
+  const { getByText } = await render(<SettingsScreen />);
+  expect(getByText('Blocked pages')).toBeTruthy();
+  expect(getByText('Nothing blocked yet.')).toBeTruthy();
+});
+
+test('Blocked pages lists the time, the address and the rule, newest first', async () => {
+  const { recordBounce, resetBouncesForTest } = require('../../src/state/bounceLog') as typeof import('../../src/state/bounceLog');
+  resetBouncesForTest();
+  const at = new Date(2026, 9, 25, 9, 5, 1).getTime();
+  recordBounce({ at, site: 'instagram', url: 'https://www.instagram.com/', rule: 'ig-5-home', to: '/direct/inbox/' });
+  recordBounce({ at: at + 120000, site: 'linkedin', url: 'https://www.linkedin.com/feed/', rule: 'li-9-feed', to: '/messaging/' });
+  await hydrateSettings();
+  const { getByText, getAllByText, queryByText } = await render(<SettingsScreen />);
+  expect(queryByText('Nothing blocked yet.')).toBeNull();
+  expect(getByText('25 Oct 09:05:01, Instagram')).toBeTruthy();
+  expect(getByText('25 Oct 09:07:01, LinkedIn')).toBeTruthy();
+  expect(getByText('linkedin.com/feed/')).toBeTruthy();
+  expect(getByText('Rule ig-5-home, sent to /direct/inbox/')).toBeTruthy();
+  const rows = getAllByText(/^Rule /).map((node) => String(node.props.children));
+  expect(rows[0]).toContain('li-9-feed');
+});

@@ -336,7 +336,10 @@ const trackComposer: HideSweep = (_settings, post) => {
     state.open = false;
     setPageContext(state.previousContext);
     post({ type: 'li-composer', open: false });
-    if (backToMessages) window.location.replace(new URL('/messaging/', location.origin).href);
+    if (backToMessages) {
+      post({ type: 'bounce', url: location.href, rule: 'li-composer-closed', to: '/messaging/' });
+      window.location.replace(new URL('/messaging/', location.origin).href);
+    }
   };
   if (!onFeed) {
     // Moved on (a posted update, a profile): that page has its own rule.

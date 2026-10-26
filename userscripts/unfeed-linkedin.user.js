@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.6.0
+// @version 1.7.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*
@@ -404,14 +404,17 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       }
     };
   }
-  function enforceRoute(site, settings, href) {
+  function enforceRoute(site, settings, href, post) {
+    var _a;
     try {
       const declared = globalThis.__UNFEED_CONTEXT__;
       const context = typeof declared === "string" && declared ? declared : "page";
       const result = decide(site, href, context, settings);
       if (result.action !== "redirect" || !result.to) return;
       const target = new URL(result.to, location.origin).href;
-      if (target !== location.href) window.location.replace(target);
+      if (target === location.href) return;
+      post({ type: "bounce", url: href, rule: (_a = result.rule) != null ? _a : "unknown", to: result.to });
+      window.location.replace(target);
     } catch (error) {
       console.warn("[unfeed] in-page enforce failed", site, error);
     }
@@ -486,7 +489,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       const onRoute = (url) => {
         if (!url) return;
         post({ type: "route", url });
-        if (config.enforce) enforceRoute(site, settings, url);
+        if (config.enforce) enforceRoute(site, settings, url, post);
         apply();
       };
       installRouteHooks(win, onRoute);
@@ -754,7 +757,10 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       state.open = false;
       setPageContext(state.previousContext);
       post({ type: "li-composer", open: false });
-      if (backToMessages) window.location.replace(new URL("/messaging/", location.origin).href);
+      if (backToMessages) {
+        post({ type: "bounce", url: location.href, rule: "li-composer-closed", to: "/messaging/" });
+        window.location.replace(new URL("/messaging/", location.origin).href);
+      }
     };
     if (!onFeed) {
       close(false);

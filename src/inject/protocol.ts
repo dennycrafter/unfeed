@@ -13,6 +13,9 @@ export type PageMessage =
   | { type: 'ig-stories'; items: { username: string; avatar: string | null }[]; done: boolean }
   | { type: 'li-own-profile'; url: string }
   | { type: 'li-composer'; open: boolean }
+  /** The page sent itself somewhere else (in-page guard, composer closed),
+   * for the Blocked pages list in Settings. */
+  | { type: 'bounce'; url: string; rule: string; to?: string }
   | { type: 'hide-stats'; matched: Record<string, number> };
 
 export function isPageMessage(value: unknown): value is PageMessage {
@@ -41,6 +44,14 @@ export function isPageMessage(value: unknown): value is PageMessage {
   }
   if (record.type === 'li-own-profile') return typeof record.url === 'string' && record.url.length > 0;
   if (record.type === 'li-composer') return typeof record.open === 'boolean';
+  if (record.type === 'bounce') {
+    return (
+      typeof record.url === 'string' &&
+      typeof record.rule === 'string' &&
+      record.rule.length > 0 &&
+      (record.to === undefined || typeof record.to === 'string')
+    );
+  }
   if (record.type === 'hide-stats') {
     return (
       typeof record.matched === 'object' &&

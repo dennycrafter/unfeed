@@ -347,3 +347,31 @@ test('pressing Stories again or a tab closes the stories screen', async () => {
   await fireEvent.press(getByLabelText('Search tab'));
   expect(queryByTestId('stories-tray')).toBeNull();
 });
+
+// Blocked pages (Denis, 25 Oct 2026): every redirect lands in the bounce log.
+test('a redirect in the page is kept in the bounce log with its rule', async () => {
+  const { getBounces, resetBouncesForTest } = require('../../src/state/bounceLog') as typeof import('../../src/state/bounceLog');
+  resetBouncesForTest();
+  await hydrateSettings();
+  const { getAllByTestId } = await render(<Shell />);
+  await postFromPage(visibleInstagram(getAllByTestId), { type: 'route', url: 'https://www.instagram.com/reels/' });
+  expect(getBounces()[0]).toMatchObject({ site: 'instagram', url: 'https://www.instagram.com/reels/', rule: 'ig-8-reels', to: '/direct/inbox/' });
+  // An allowed page is never logged.
+  await postFromPage(visibleInstagram(getAllByTestId), { type: 'route', url: 'https://www.instagram.com/p/abc/' });
+  expect(getBounces()).toHaveLength(1);
+});
+
+test('a bounce the page reports itself is kept too', async () => {
+  const { getBounces, resetBouncesForTest } = require('../../src/state/bounceLog') as typeof import('../../src/state/bounceLog');
+  resetBouncesForTest();
+  await hydrateSettings();
+  const { getByTestId, getByLabelText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
+  await postFromPage(getByTestId('webview-linkedin'), {
+    type: 'bounce',
+    url: 'https://www.linkedin.com/feed/',
+    rule: 'li-composer-closed',
+    to: '/messaging/',
+  });
+  expect(getBounces()[0]).toMatchObject({ site: 'linkedin', rule: 'li-composer-closed' });
+});
