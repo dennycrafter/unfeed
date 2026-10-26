@@ -9,6 +9,7 @@ import { Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacit
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { Toast } from '@/components/Toast';
+import { formatBounceTime, shortBounceUrl, useBounces, type BounceEntry } from '@/state/bounceLog';
 import { requestSiteLogout, resetSettings, updateSettings, useSettings } from '@/state/store';
 import { colors, radius } from '@/theme/tokens';
 import type { Site } from '@/rules/decide';
@@ -89,6 +90,26 @@ function QuietButton({ label, onPress, danger }: { label: string; onPress: () =>
   );
 }
 
+/** One stopped page in the Blocked pages list: when, which app, the
+ * address, and the rule that fired (Denis, 25 Oct 2026). */
+function BounceRow({ entry }: { entry: BounceEntry }) {
+  const app = entry.site === 'instagram' ? 'Instagram' : 'LinkedIn';
+  return (
+    <View style={styles.bounceRow} accessibilityLabel={`Blocked ${entry.url} by rule ${entry.rule}`}>
+      <Text style={styles.bounceMeta}>
+        {formatBounceTime(entry.at)}, {app}
+      </Text>
+      <Text style={styles.bounceUrl} selectable>
+        {shortBounceUrl(entry.url)}
+      </Text>
+      <Text style={styles.bounceMeta} selectable>
+        Rule {entry.rule}
+        {entry.to ? `, sent to ${entry.to}` : ''}
+      </Text>
+    </View>
+  );
+}
+
 function ConfirmDialog({ spec, onCancel }: { spec: ConfirmSpec; onCancel: () => void }) {
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onCancel}>
@@ -122,6 +143,7 @@ function ConfirmDialog({ spec, onCancel }: { spec: ConfirmSpec; onCancel: () => 
 
 export default function SettingsScreen() {
   const settings = useSettings();
+  const bounces = useBounces();
   // Drafts hold what is typed; null means show the stored value.
   const [usernameDraft, setUsernameDraft] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState<string | null>(null);
@@ -244,6 +266,21 @@ export default function SettingsScreen() {
         <Text style={styles.about}>
           About Unfeed{'\n'}Version {version}
         </Text>
+
+        <SectionLabel>Blocked pages</SectionLabel>
+        <Text style={styles.sectionHint}>The last 20 pages the app stopped or sent somewhere else, newest first.</Text>
+        <View style={styles.box} testID="blocked-pages">
+          {bounces.length === 0 ? (
+            <Text style={styles.emptyRow}>Nothing blocked yet.</Text>
+          ) : (
+            bounces.map((entry, index) => (
+              <View key={`${entry.at}-${entry.url}-${entry.rule}`}>
+                {index > 0 ? <Divider /> : null}
+                <BounceRow entry={entry} />
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
       <Toast message={toast} />
       {confirm ? <ConfirmDialog spec={confirm} onCancel={() => setConfirm(null)} /> : null}
@@ -291,7 +328,12 @@ const styles = StyleSheet.create({
   quietButton: { paddingVertical: 6, paddingHorizontal: 4 },
   quietButtonText: { color: colors.silver, fontSize: 15 },
   dangerText: { color: colors.bad },
-  about: { color: colors.muted, fontSize: 13, textAlign: 'center', marginTop: 24, lineHeight: 20 },
+  about: { color: colors.muted, fontSize: 13, textAlign: 'center', marginTop: 24, marginBottom: 12, lineHeight: 20 },
+  sectionHint: { color: colors.muted, fontSize: 12, marginBottom: 4 },
+  emptyRow: { color: colors.muted, fontSize: 14, padding: 14 },
+  bounceRow: { paddingHorizontal: 14, paddingVertical: 10, gap: 2 },
+  bounceMeta: { color: colors.muted, fontSize: 12 },
+  bounceUrl: { color: colors.fg, fontSize: 14 },
   dialogBackdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   dialogCard: {
     backgroundColor: colors.surface2,

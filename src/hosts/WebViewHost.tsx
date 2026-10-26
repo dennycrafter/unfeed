@@ -16,6 +16,7 @@ import * as Linking from 'expo-linking';
 import { parsePageMessage } from '../inject/protocol';
 import { buildSettingsPreamble } from '../inject/settingsPreamble';
 import { decide, toAbsoluteUrl, type DecideResult, type Site } from '../rules/decide';
+import { recordBounce } from '../state/bounceLog';
 import { colors } from '../theme/tokens';
 import { loadDecision } from './loadDecision';
 import type { WebViewHostApi, WebViewHostProps } from './types';
@@ -34,6 +35,11 @@ function redirectTarget(site: Site, result: DecideResult, requestedUrl: string):
   if (result.action !== 'redirect') return null;
   const target = toAbsoluteUrl(site, result.to ?? '/');
   return requestedUrl === target ? null : target;
+}
+
+/** Keeps the bounce for the Blocked pages list in Settings. */
+function logBounce(site: Site, url: string, result: DecideResult): void {
+  recordBounce({ at: Date.now(), site, url, rule: result.rule ?? 'unknown', to: result.to });
 }
 
 export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function WebViewHost(
@@ -109,7 +115,10 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         return false;
       }
       const target = redirectTarget(site, result, request.url);
-      if (target) setSource(target);
+      if (target) {
+        logBounce(site, request.url, result);
+        setSource(target);
+      }
       return false;
     },
     [openOutside, runGuard, site],
@@ -118,8 +127,12 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   const handleNavigationStateChange = useCallback(
     (state: WebViewNavigation): void => {
       canGoBackRef.current = state.canGoBack;
-      const target = redirectTarget(site, runGuard(state.url), state.url);
-      if (target) setSource(target);
+      const result = runGuard(state.url);
+      const target = redirectTarget(site, result, state.url);
+      if (target) {
+        logBounce(site, state.url, result);
+        setSource(target);
+      }
     },
     [runGuard, site],
   );
@@ -132,12 +145,15 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         const result = runGuard(message.url);
         if (result.action === 'redirect') {
           const target = toAbsoluteUrl(site, result.to ?? '/');
+          logBounce(site, message.url, result);
           // Single page navigation never fires shouldStartLoad, so the
           // in page replace is how a redirect is enforced here (gotcha 2).
           webViewRef.current?.injectJavaScript(`window.location.replace(${JSON.stringify(target)}); true;`);
         } else if (result.action === 'external') {
           openOutside(message.url);
         }
+      } else if (message.type === 'bounce') {
+        recordBounce({ at: Date.now(), site, url: message.url, rule: message.rule, to: message.to });
       }
       onMessageRef.current?.(message);
     },

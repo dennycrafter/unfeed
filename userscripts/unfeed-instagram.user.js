@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed Instagram
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.6.0
+// @version 1.7.0
 // @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
 // @match https://instagram.com/*
 // @match https://www.instagram.com/*
@@ -528,14 +528,17 @@ a[href$="/following/"] {
       }
     };
   }
-  function enforceRoute(site, settings, href) {
+  function enforceRoute(site, settings, href, post) {
+    var _a;
     try {
       const declared = globalThis.__UNFEED_CONTEXT__;
       const context = typeof declared === "string" && declared ? declared : "page";
       const result = decide(site, href, context, settings);
       if (result.action !== "redirect" || !result.to) return;
       const target = new URL(result.to, location.origin).href;
-      if (target !== location.href) window.location.replace(target);
+      if (target === location.href) return;
+      post({ type: "bounce", url: href, rule: (_a = result.rule) != null ? _a : "unknown", to: result.to });
+      window.location.replace(target);
     } catch (error) {
       console.warn("[unfeed] in-page enforce failed", site, error);
     }
@@ -610,7 +613,7 @@ a[href$="/following/"] {
       const onRoute = (url) => {
         if (!url) return;
         post({ type: "route", url });
-        if (config.enforce) enforceRoute(site, settings, url);
+        if (config.enforce) enforceRoute(site, settings, url, post);
         apply();
       };
       installRouteHooks(win, onRoute);

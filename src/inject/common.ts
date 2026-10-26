@@ -134,7 +134,7 @@ function createApplyPass(site: Site, settings: InjectSettings, config: InjectCon
  * the native side runs, resolving redirects against the current origin. The
  * page reads the tab context the native side declared in the preamble, so
  * context dependent rows (Instagram's home rule) behave as native intends. */
-function enforceRoute(site: Site, settings: InjectSettings, href: string): void {
+function enforceRoute(site: Site, settings: InjectSettings, href: string, post: PostMessage): void {
   try {
     // The native side declares the tab that caused this load through the
     // preamble (Instagram's home rule is context dependent); pages without
@@ -144,7 +144,9 @@ function enforceRoute(site: Site, settings: InjectSettings, href: string): void 
     const result = decide(site, href, context, settings);
     if (result.action !== 'redirect' || !result.to) return;
     const target = new URL(result.to, location.origin).href;
-    if (target !== location.href) window.location.replace(target);
+    if (target === location.href) return;
+    post({ type: 'bounce', url: href, rule: result.rule ?? 'unknown', to: result.to });
+    window.location.replace(target);
   } catch (error) {
     console.warn('[unfeed] in-page enforce failed', site, error);
   }
@@ -240,7 +242,7 @@ export function setupInject(site: Site, config: InjectConfig = {}): void {
     const onRoute = (url: string) => {
       if (!url) return;
       post({ type: 'route', url });
-      if (config.enforce) enforceRoute(site, settings, url);
+      if (config.enforce) enforceRoute(site, settings, url, post);
       apply();
     };
     installRouteHooks(win, onRoute);

@@ -360,3 +360,25 @@ test('sound: the hidden stories tray reader never unmutes anything', async ({ pa
   expect((await videoState(page, 'with-button')).muted).toBe(true);
   expect(await page.evaluate(() => (window as unknown as { __sitePresses: number }).__sitePresses)).toBe(0);
 });
+
+test('the in-page guard reports each bounce with its rule for Blocked pages', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  // The page reloads on the bounce, so keep what it posts across the hop.
+  await page.evaluate(() => {
+    const bridge = (window as unknown as { ReactNativeWebView: { postMessage: (data: string) => void } }).ReactNativeWebView;
+    const original = bridge.postMessage;
+    bridge.postMessage = (data: string) => {
+      sessionStorage.setItem('posted', `${sessionStorage.getItem('posted') ?? ''}${data}\n`);
+      original(data);
+    };
+  });
+  await page.evaluate(() => history.pushState({}, '', '/explore/'));
+  await page.waitForURL('https://www.instagram.com/explore/search/');
+  const posted = await page.evaluate(() => (sessionStorage.getItem('posted') ?? '').trim().split('\n').map((line) => JSON.parse(line)));
+  expect(posted).toContainEqual({
+    type: 'bounce',
+    url: 'https://www.instagram.com/explore/',
+    rule: 'ig-7-explore',
+    to: '/explore/search/',
+  });
+});
