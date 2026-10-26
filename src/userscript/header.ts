@@ -6,7 +6,7 @@ import instagramJson from '../rules/instagram.json';
 import linkedinJson from '../rules/linkedin.json';
 import type { Site } from '../rules/decide';
 
-export const USERSCRIPT_VERSION = '1.3.0';
+export const USERSCRIPT_VERSION = '1.4.0';
 
 interface SiteMeta {
   name: string;

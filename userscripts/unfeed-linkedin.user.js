@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.3.0
+// @version 1.4.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*
@@ -49,7 +49,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       },
       { id: "ig-2-direct", match: { kind: "prefix", paths: ["/direct/"] }, action: "allow" },
       { id: "ig-3-stories", match: { kind: "prefix", paths: ["/stories/"] }, action: "allow" },
-      { id: "ig-4-home-stories", match: { kind: "home", context: "stories" }, action: "allow" },
+      { id: "ig-4-home-stories-tray", match: { kind: "home", context: "stories-tray" }, action: "allow" },
       { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
       { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
       { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },

@@ -30,11 +30,17 @@ test.describe('instagram screens at phone size', () => {
     await page.screenshot({ path: screenshot('t2-instagram-profile.png') });
   });
 
-  test('Stories button opens the stories tray on the home path', async ({ page }) => {
+  test('Stories button opens the native stories screen, never Instagram home', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Stories' }).click();
-    await expect(page.getByText('https://www.instagram.com/').first()).toBeVisible();
-    await expect(page.getByText('tab: stories')).toBeVisible();
+    await expect(page.getByTestId('stories-tray')).toBeVisible();
+    await expect(page.getByText('Loading stories...')).toBeVisible();
+    await page.screenshot({ path: screenshot('t2-instagram-stories-loading.png') });
+  });
+
+  test('the stories screen shows its own circles', async ({ page }) => {
+    await page.goto('/?demoStories=1');
+    await expect(page.getByRole('button', { name: "Watch alice's story" })).toBeVisible();
     await page.screenshot({ path: screenshot('t2-instagram-stories.png') });
   });
 });
@@ -59,9 +65,8 @@ test.describe('qa capture', () => {
   }
 
   test('instagram stories at the qa evidence size', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Stories' }).click();
-    await expect(page.getByText('tab: stories')).toBeVisible();
+    await page.goto('/?demoStories=1');
+    await expect(page.getByRole('button', { name: "Watch alice's story" })).toBeVisible();
     await page.screenshot({ path: screenshot('t2-instagram-stories-720.png') });
   });
 });

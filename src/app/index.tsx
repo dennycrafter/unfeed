@@ -13,9 +13,11 @@ import { BottomBar, type BottomTab } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
 import { IconAvatar, IconChat, IconGear, IconLink, IconPlus, IconQr, IconSearch, IconStories } from '@/components/icons';
 import { LinkSheet } from '@/components/LinkSheet';
+import { StoriesTray, type StoriesStatus, type StoryCircle } from '@/components/StoriesTray';
 import { Toast } from '@/components/Toast';
-import { InstagramHost, INSTAGRAM_HOME_URL, INSTAGRAM_LOGOUT_URL, INSTAGRAM_ROOT_URL, type InstagramHostHandle } from '@/hosts/InstagramHost';
+import { InstagramHost, INSTAGRAM_HOME_URL, INSTAGRAM_LOGOUT_URL, type InstagramHostHandle } from '@/hosts/InstagramHost';
 import { LinkedInHost } from '@/hosts/LinkedInHost';
+import { StoriesTrayReader } from '@/hosts/StoriesTrayReader';
 import type { PageMessage } from '@/inject/protocol';
 import type { PastedLink } from '@/link/pastedLink';
 import { tickHaptic } from '@/state/haptics';
@@ -81,10 +83,30 @@ function pathOf(url: string): string | null {
   }
 }
 
+/** The Stories button (Denis, 25 Oct 2026): the native stories screen shows
+ * while viewing is null; tapping a circle opens that person's stories in the
+ * visible web view. Instagram home never shows in it. */
 interface StoriesSession {
   origin: InstagramTab;
-  /** True once a story route was seen, so the next home route means closed. */
+  /** Whose stories the visible web view is playing, or null for the circles. */
+  viewing: string | null;
+  /** True once a story route was seen, so leaving it means the story ended. */
   seenStory: boolean;
+}
+
+/** How long the hidden reader gets before the tray counts as empty. */
+const TRAY_TIMEOUT_MS = 15000;
+
+function storyUrl(username: string): string {
+  return `https://www.instagram.com/stories/${encodeURIComponent(username)}/`;
+}
+
+/** Web preview only: ?demoStories=1 seeds a few circles so the screen tests
+ * can capture the stories screen. The web placeholders never post a tray. */
+function initialStoryItems(): StoryCircle[] {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return [];
+  if (new URLSearchParams(window.location.search).get('demoStories') !== '1') return [];
+  return ['alice', 'bob.builds', 'cara_k', 'dan', 'eve.photo'].map((username) => ({ username, avatar: null }));
 }
 
 function StoriesButton({ onPress, active }: { onPress: () => void; active: boolean }) {
@@ -155,7 +177,15 @@ export default function Index() {
   const { settings, hydrated, logout } = useStoreState();
   const [activeApp, setActiveApp] = useState<AppKey>(() => getStoreState().settings.lastApp);
   const [activeTab, setActiveTab] = useState<InstagramTab>(DEFAULT_TAB);
-  const [stories, setStories] = useState<StoriesSession | null>(null);
+  const [stories, setStories] = useState<StoriesSession | null>(() =>
+    initialStoryItems().length > 0 ? { origin: DEFAULT_TAB, viewing: null, seenStory: false } : null,
+  );
+  const [storyItems, setStoryItems] = useState<StoryCircle[]>(initialStoryItems);
+  const [storiesStatus, setStoriesStatus] = useState<StoriesStatus>(() =>
+    initialStoryItems().length > 0 ? 'ready' : 'loading',
+  );
+  // Bumped on every open or retry, so the hidden reader loads home afresh.
+  const [trayLoad, setTrayLoad] = useState(0);
   const [tabUrls, setTabUrls] = useState<Record<InstagramTab, string>>(initialTabUrls);
   const [unread, setUnread] = useState<{ instagram: number; linkedin: number }>(initialUnread);
   const [scrollSignal, setScrollSignal] = useState(0);
@@ -250,10 +280,65 @@ export default function Index() {
     [selectTab, startPost],
   );
 
+  const refreshTray = useCallback(() => {
+    setStoriesStatus('loading');
+    setTrayLoad((count) => count + 1);
+  }, []);
+
+  // The Stories button opens the native stories screen, or closes it when it
+  // is already showing. While a story plays it goes back to the circles.
   const openStories = useCallback(() => {
     setScannedUrl(null);
-    setStories((current) => current ?? { origin: activeTab, seenStory: false });
-  }, [activeTab]);
+    if (stories && stories.viewing === null) {
+      setStories(null);
+      setActiveTab(stories.origin);
+      return;
+    }
+    setStories((current) =>
+      current ? { ...current, viewing: null, seenStory: false } : { origin: activeTab, viewing: null, seenStory: false },
+    );
+    refreshTray();
+  }, [activeTab, refreshTray, stories]);
+
+  const openStory = useCallback(
+    (username: string) => {
+      tickHaptic(settings.haptics);
+      setStories((current) => (current ? { ...current, viewing: username, seenStory: false } : current));
+    },
+    [settings.haptics],
+  );
+
+  const closeStories = useCallback(() => {
+    if (stories) setActiveTab(stories.origin);
+    setStories(null);
+  }, [stories]);
+
+  // The hidden reader gets a fixed time; no tray by then is an empty tray,
+  // never a fall back to the page.
+  const trayShowing = stories !== null && stories.viewing === null;
+  useEffect(() => {
+    if (!trayShowing) return;
+    const timer = setTimeout(() => {
+      setStoriesStatus((status) => (status === 'loading' ? 'empty' : status));
+    }, TRAY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [trayLoad, trayShowing]);
+
+  const handleTrayMessage = useCallback((message: PageMessage) => {
+    if (message.type === 'ig-stories') {
+      if (message.items.length > 0) {
+        setStoryItems(message.items);
+        setStoriesStatus('ready');
+      } else if (message.done) {
+        setStoryItems([]);
+        setStoriesStatus('empty');
+      }
+      return;
+    }
+    if (message.type === 'route' && pathOf(message.url)?.startsWith('/accounts/login')) {
+      setStoriesStatus('login');
+    }
+  }, []);
 
   // A scanned Instagram link switches apps and moves the WebView, all in the
   // sheet's event handler (charter 8.7).
@@ -350,27 +435,30 @@ export default function Index() {
         return;
       }
       if (stories) {
+        // The native circles are showing: the page behind them keeps still.
+        if (stories.viewing === null) return;
         if (path.startsWith('/stories/')) {
-          setStories((current) => (current ? { ...current, seenStory: true } : current));
+          if (!stories.seenStory) setStories((current) => (current ? { ...current, seenStory: true } : current));
           return;
         }
-        if (path === '/') {
-          if (stories.seenStory) {
-            // The story ended or was closed: return to the origin tab (8.6).
-            setStories(null);
-            setActiveTab(stories.origin);
-          }
+        // The story ended or was closed. Instagram goes home, which the guard
+        // sends to the inbox before it paints: back to the circles.
+        if (path === '/' || (stories.seenStory && path.startsWith('/direct/inbox'))) {
+          setStories((current) => (current ? { ...current, viewing: null, seenStory: false } : current));
+          refreshTray();
           return;
         }
-        // Browsing on from a story (a profile, say): restore the origin tab
-        // without navigating, the page reached is allowed content.
+        // Browsing on from a story (a profile, a reply in DMs): that page
+        // becomes the origin tab's page, without loading it again.
+        const origin = stories.origin;
+        setTabUrls((prev) => ({ ...prev, [origin]: message.url }));
         setStories(null);
-        setActiveTab(stories.origin);
+        setActiveTab(origin);
         return;
       }
       setTabUrls((prev) => (prev[activeTab] === message.url ? prev : { ...prev, [activeTab]: message.url }));
     },
-    [activeTab, handleCreateMissing, handleUsernameDetected, scannedUrl, stories],
+    [activeTab, handleCreateMissing, handleUsernameDetected, refreshTray, scannedUrl, stories],
   );
 
   // Android back button (section 8.6): WebView back, then the default tab,
@@ -381,7 +469,8 @@ export default function Index() {
     backHandlerRef.current = (): boolean => {
       if (activeApp !== 'instagram') return false;
       if (stories) {
-        setStories(null);
+        if (stories.viewing !== null) setStories({ ...stories, viewing: null, seenStory: false });
+        else closeStories();
         return true;
       }
       if (hostRef.current?.canGoBack()) {
@@ -429,16 +518,33 @@ export default function Index() {
         }
       />
       <View style={[styles.hostArea, activeApp !== 'instagram' && styles.hidden]} testID="host-instagram">
-        {hydrated ? (
-          <InstagramHost
-            ref={hostRef}
-            url={stories ? INSTAGRAM_ROOT_URL : (scannedUrl ?? tabUrls[activeTab])}
-            context={stories ? 'stories' : (scannedUrl ? 'profile' : activeTab)}
-            settings={settings}
-            onMessage={handleMessage}
-            scrollToTopSignal={scrollSignal}
-          />
-        ) : null}
+        <View style={styles.hostArea}>
+          {hydrated ? (
+            <InstagramHost
+              ref={hostRef}
+              url={stories?.viewing ? storyUrl(stories.viewing) : (scannedUrl ?? tabUrls[activeTab])}
+              context={stories?.viewing ? 'stories' : scannedUrl ? 'profile' : activeTab}
+              settings={settings}
+              onMessage={handleMessage}
+              scrollToTopSignal={scrollSignal}
+            />
+          ) : null}
+          {trayShowing ? (
+            <View style={styles.cover}>
+              {/* The hidden reader sits under the opaque stories screen. */}
+              {hydrated ? <StoriesTrayReader key={trayLoad} settings={settings} onMessage={handleTrayMessage} /> : null}
+              <View style={styles.cover}>
+                <StoriesTray
+                  status={storiesStatus}
+                  items={storyItems}
+                  onOpen={openStory}
+                  onRetry={refreshTray}
+                  onClose={closeStories}
+                />
+              </View>
+            </View>
+          ) : null}
+        </View>
         <BottomBar<InstagramBarKey> tabs={INSTAGRAM_TABS} active={activeTab} onSelect={selectBarItem} />
         <Toast message={toast} />
       </View>
@@ -468,6 +574,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   hostArea: { flex: 1 },
+  cover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
   hidden: { display: 'none' },
   headerButton: { padding: 8 },
   headerPair: { flexDirection: 'row', alignItems: 'center' },

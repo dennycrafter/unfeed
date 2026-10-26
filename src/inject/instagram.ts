@@ -187,58 +187,99 @@ const KEEP_ATTR = 'data-unfeed-keep';
 
 /** Story controls on the home page: buttons labelled "Story by name", the
  * own "Your story" item and links into /stories/. Never inside a feed post. */
-const STORY_CONTROL = '[aria-label^="Story by" i], [aria-label$="\'s story" i], [aria-label="Your story" i], a[href^="/stories/"]';
+const STORY_CONTROL = '[aria-label^="Story by" i], [aria-label$="\'s story" i], [aria-label*="\'s story," i], a[href^="/stories/"]';
 
-function storyControls(): Element[] {
-  return [...document.querySelectorAll(STORY_CONTROL)].filter((element) => !element.closest('article'));
+const USERNAME = /^[A-Za-z0-9._]{1,30}$/;
+
+/** The username a story control belongs to: its /stories/<name>/ link, its
+ * "Story by name" or "name's story" label, or its avatar's alt text. */
+function storyUsername(control: Element): string | null {
+  const link = control.matches('a[href^="/stories/"]') ? control : control.querySelector('a[href^="/stories/"]');
+  const href = link?.getAttribute('href') ?? '';
+  const fromHref = /^\/stories\/([^/?#]+)/.exec(href)?.[1];
+  if (fromHref && fromHref !== 'highlights' && USERNAME.test(fromHref)) return fromHref;
+  const label = (control.getAttribute('aria-label') ?? '').trim();
+  const fromLabel = /^story by ([^,\s]+)/i.exec(label)?.[1] ?? /^([^,\s]+)'s story/i.exec(label)?.[1];
+  if (fromLabel && USERNAME.test(fromLabel)) return fromLabel;
+  const alt = control.querySelector('img[alt]')?.getAttribute('alt') ?? '';
+  const fromAlt = /^([^,\s]+)'s profile picture/i.exec(alt)?.[1];
+  return fromAlt && USERNAME.test(fromAlt) ? fromAlt : null;
 }
 
-function commonAncestor(elements: Element[]): Element | null {
-  let candidate: Element | null = elements[0] ?? null;
-  while (candidate && !elements.every((element) => candidate!.contains(element))) {
-    candidate = candidate.parentElement;
+function storyAvatar(control: Element): string | null {
+  const image = control.querySelector('img');
+  if (!(image instanceof HTMLImageElement)) return null;
+  const source = image.currentSrc || image.getAttribute('src') || '';
+  try {
+    const url = new URL(source, location.origin);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch {
+    return null;
   }
-  return candidate;
 }
 
-const NOTE_ID = 'unfeed-stories-note';
-const NOTE_AFTER_MS = 8000;
-
-/** Shown when the tray never turns up, so a blank page explains itself. */
-function showStoriesNote(): void {
-  if (document.getElementById(NOTE_ID) || !document.body) return;
-  const note = document.createElement('div');
-  note.id = NOTE_ID;
-  note.setAttribute(KEEP_ATTR, '');
-  note.textContent = 'No stories to show right now.';
-  note.style.cssText =
-    'position:fixed;left:16px;right:16px;top:40%;text-align:center;color:#9a9aa3;' +
-    'font:15px -apple-system,Inter,system-ui,sans-serif;z-index:2147483647;';
-  document.body.appendChild(note);
+interface StoryItem {
+  username: string;
+  avatar: string | null;
 }
 
-/** The stories button (Denis, 23 Oct 2026): the home page is invisible and
- * only the stories tray is kept, found from the story controls themselves.
- * The tray is the smallest element holding every control; if that would be
- * the page, each control is kept on its own instead. */
-const keepStoriesTray: HideSweep = () => {
-  if (!pageScopes(location.pathname).includes('home')) return;
-  const scope = globalThis as { __UNFEED_IG__?: { homeSince?: number } };
-  const state = (scope.__UNFEED_IG__ = scope.__UNFEED_IG__ ?? {});
-  state.homeSince = state.homeSince ?? Date.now();
-  const controls = storyControls();
-  if (controls.length === 0) {
-    if (Date.now() - state.homeSince > NOTE_AFTER_MS) showStoriesNote();
-    return;
+/** Every story in the tray, in tray order, once per person. The own "Your
+ * story" item has no username in its label and is skipped unless it links
+ * to a story of its own. */
+function readStoryItems(root: ParentNode): StoryItem[] {
+  const items: StoryItem[] = [];
+  const seen = new Set<string>();
+  for (const control of root.querySelectorAll(STORY_CONTROL)) {
+    if (control.closest('article')) continue;
+    const username = storyUsername(control);
+    if (!username || seen.has(username.toLowerCase())) continue;
+    seen.add(username.toLowerCase());
+    items.push({ username, avatar: storyAvatar(control) });
   }
-  document.getElementById(NOTE_ID)?.remove();
-  const tray = controls.length > 1 ? commonAncestor(controls) : (controls[0].parentElement ?? controls[0]);
-  const tooBig = !tray || tray.matches('main, [role="main"], body, html') || tray.querySelector('article') !== null;
-  const keep = tooBig ? controls : [tray];
-  for (const element of keep) {
-    if (element.getAttribute(KEEP_ATTR) === null) element.setAttribute(KEEP_ATTR, '');
+  return items;
+}
+
+const TRAY_GIVE_UP_MS = 10000;
+
+/** The stories tray (Denis, 25 Oct 2026): Instagram home loads only in a
+ * hidden web view that never shows on screen (context stories-tray). This
+ * reads the tray and posts it to native, which draws its own row of story
+ * circles. Polled on a timer as well as on DOM changes, because a web view
+ * that is never on screen may not get animation frames. */
+function watchStoriesTray(): void {
+  const context = (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__;
+  if (context !== 'stories-tray' || typeof document === 'undefined') return;
+  const post = createPoster('instagram');
+  const started = Date.now();
+  let last = '';
+  const check = (): void => {
+    try {
+      // Also on the timer: a never shown web view may get no animation frames.
+      silenceVideos();
+      if (!pageScopes(location.pathname).includes('home')) return;
+      const items = readStoryItems(document);
+      const done = items.length > 0 || Date.now() - started > TRAY_GIVE_UP_MS;
+      const key = JSON.stringify([items, done]);
+      if (key === last) return;
+      last = key;
+      post({ type: 'ig-stories', items, done });
+    } catch (error) {
+      console.warn('[unfeed] stories tray read failed', error);
+    }
+  };
+  window.setInterval(check, 700);
+  let pending = false;
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(() => {
+      if (pending) return;
+      pending = true;
+      setTimeout(() => {
+        pending = false;
+        check();
+      }, 150);
+    }).observe(document, { childList: true, subtree: true });
   }
-};
+}
 
 /** Videos friends send (Denis, 23 Oct 2026): keep them playing inside the
  * page, so iOS never throws them into its own sideways full screen player. */
@@ -249,6 +290,19 @@ const keepVideosInline: HideSweep = () => {
     video.setAttribute('webkit-playsinline', '');
     video.playsInline = true;
   }
+};
+
+/** The hidden stories tray reader must never make a sound: home's feed
+ * videos stay muted and paused there. */
+function silenceVideos(): void {
+  for (const video of document.querySelectorAll('video')) {
+    video.muted = true;
+    if (!video.paused) video.pause();
+  }
+}
+
+const silenceHiddenPage: HideSweep = () => {
+  if ((globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__ === 'stories-tray') silenceVideos();
 };
 
 /** Instagram's own create controls, newest labels first. */
@@ -322,9 +376,10 @@ function installCreateHook(): void {
 }
 
 installCreateHook();
+watchStoriesTray();
 
 setupInject('instagram', {
-  sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepStoriesTray, keepVideosInline],
+  sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepVideosInline, silenceHiddenPage],
   unread: true,
   enforce: true,
 });

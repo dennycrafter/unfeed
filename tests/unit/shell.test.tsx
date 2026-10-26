@@ -51,7 +51,7 @@ jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
   const WebView = React.forwardRef(function MockWebView(
-    props: { testID?: string; source?: { uri?: string } },
+    props: { testID?: string; source?: { uri?: string }; onMessage?: (event: unknown) => void },
     ref: React.Ref<unknown>,
   ) {
     React.useImperativeHandle(ref, () => ({
@@ -64,13 +64,14 @@ jest.mock('react-native-webview', () => {
       stopLoading: () => undefined,
     }));
     // The loaded address rides on the hint so tests can read it.
-    return <View testID={props.testID} accessibilityHint={props.source?.uri} />;
+    // onMessage rides along so tests can post page messages with fireEvent.
+    return <View testID={props.testID} accessibilityHint={props.source?.uri} onMessage={props.onMessage} />;
   });
   return { __esModule: true, WebView, default: WebView };
 });
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Index from '../../src/app/index';
@@ -249,4 +250,100 @@ test('the LinkedIn Post button opens LinkedIn\'s own composer', async () => {
   await waitFor(() =>
     expect(loadedUrl(getByTestId, 'linkedin')).toBe('https://www.linkedin.com/feed/?shareActive=true'),
   );
+});
+
+// Stories (Denis, 25 Oct 2026): the Stories button shows native circles read
+// by a hidden web view. Instagram home never loads in the visible one.
+function postFromPage(webview: unknown, message: Record<string, unknown>): Promise<void> {
+  return fireEvent(webview as never, 'message', { nativeEvent: { data: JSON.stringify(message) } });
+}
+
+function visibleInstagram(getAllByTestId: (id: string, options?: object) => { props: { accessibilityHint?: string } }[]) {
+  return getAllByTestId('webview-instagram', anyVisibility)[0];
+}
+
+test('Stories shows the native stories screen; home loads only in the hidden reader', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId, getAllByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Stories'));
+  expect(getByTestId('stories-tray')).toBeTruthy();
+  expect(getByText('Loading stories...')).toBeTruthy();
+  const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
+  expect(reader.props.accessibilityHint).toBe('https://www.instagram.com/');
+  // The visible web view stays on the tab page; it never loads home.
+  expect(visibleInstagram(getAllByTestId).props.accessibilityHint).toBe('https://www.instagram.com/direct/inbox/');
+});
+
+test('the circles come from the hidden reader, and a tap opens that story in the visible web view', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId, getAllByTestId, queryByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Stories'));
+  const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
+  await postFromPage(reader, {
+    type: 'ig-stories',
+    items: [
+      { username: 'alice', avatar: 'https://scontent.cdninstagram.com/alice.jpg' },
+      { username: 'bob', avatar: null },
+    ],
+    done: true,
+  });
+  expect(getByText('alice')).toBeTruthy();
+  expect(getByText('bob')).toBeTruthy();
+  await fireEvent.press(getByLabelText("Watch bob's story"));
+  expect(queryByTestId('stories-tray')).toBeNull();
+  expect(queryByTestId('stories-tray-reader', anyVisibility)).toBeNull();
+  const visible = visibleInstagram(getAllByTestId);
+  expect(visible.props.accessibilityHint).toBe('https://www.instagram.com/stories/bob/');
+
+  // The story plays, then closes: Instagram heads home, Unfeed shows the circles again.
+  await postFromPage(visible, { type: 'route', url: 'https://www.instagram.com/stories/bob/123/' });
+  await postFromPage(visible, { type: 'route', url: 'https://www.instagram.com/' });
+  expect(getByTestId('stories-tray')).toBeTruthy();
+});
+
+test('an empty tray says so and never shows the page', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Stories'));
+  const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
+  await postFromPage(reader, { type: 'ig-stories', items: [], done: true });
+  expect(getByText('No stories to show right now.')).toBeTruthy();
+  expect(getByLabelText('Try again')).toBeTruthy();
+});
+
+test('no answer from the hidden reader in time counts as an empty tray', async () => {
+  jest.useFakeTimers();
+  try {
+    await hydrateSettings();
+    const { getByLabelText, getByText } = await render(<Shell />);
+    await fireEvent.press(getByLabelText('Stories'));
+    expect(getByText('Loading stories...')).toBeTruthy();
+    await act(async () => {
+      jest.advanceTimersByTime(16000);
+    });
+    expect(getByText('No stories to show right now.')).toBeTruthy();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('a login page in the hidden reader asks to log in first', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Stories'));
+  const reader = within(getByTestId('stories-tray-reader', anyVisibility)).getByTestId('webview-instagram', anyVisibility);
+  await postFromPage(reader, { type: 'route', url: 'https://www.instagram.com/accounts/login/?next=%2F' });
+  expect(getByText(/Log in to Instagram first/)).toBeTruthy();
+});
+
+test('pressing Stories again or a tab closes the stories screen', async () => {
+  await hydrateSettings();
+  const { getByLabelText, queryByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('Stories'));
+  expect(queryByTestId('stories-tray')).toBeTruthy();
+  await fireEvent.press(getByLabelText('Stories'));
+  expect(queryByTestId('stories-tray')).toBeNull();
+  await fireEvent.press(getByLabelText('Stories'));
+  await fireEvent.press(getByLabelText('Search tab'));
+  expect(queryByTestId('stories-tray')).toBeNull();
 });
