@@ -30,6 +30,31 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
 [data-unfeed-hidden] {
   display: none !important;
 }
+
+/* Unfeed's colours and font on the page (Denis, 25 Oct 2026). Only LinkedIn's
+   own colour variables are set, so nothing can end up dark on dark if the
+   site renames them. The app's dark appearance also asks the page for its
+   dark mode. */
+:root {
+  color-scheme: dark !important;
+  --color-background-canvas: #0b0b0d !important;
+  --color-background-container: #121215 !important;
+  --color-background-container-tint: #1c1c20 !important;
+  --color-background-scrim: rgba(0, 0, 0, 0.55) !important;
+  --color-text: #f2f2f4 !important;
+  --color-text-low-emphasis: #9a9aa3 !important;
+  --color-text-secondary: #9a9aa3 !important;
+  --color-icon: #e8e8ea !important;
+  --color-border: #2a2a30 !important;
+  --color-border-faint: #2a2a30 !important;
+  --color-divider: #2a2a30 !important;
+}
+body,
+button,
+input,
+textarea {
+  font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif !important;
+}
 `;
 
   // src/rules/instagram.json
@@ -650,67 +675,43 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       if (inSiteBar(item)) hide(item);
     }
   };
-  var PROFILE_ITEM_ATTR = "data-unfeed-profile";
-  var PERSON_ICON = '<circle cx="12" cy="7.5" r="4" fill="currentColor"></circle><path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5z" fill="currentColor"></path>';
-  function isBottomBar(element) {
-    if (element.closest("header")) return false;
-    let node = element;
-    for (let hop = 0; node !== null && hop < 8; hop += 1) {
-      const position = getComputedStyle(node).position;
-      if (position === "fixed" || position === "sticky") {
-        const rect = node.getBoundingClientRect();
-        return rect.top > window.innerHeight / 2;
-      }
+  var SECTIONS = ["feed", "mynetwork", "messaging", "notifications", "jobs", "search"];
+  var SECTION_PATH = new RegExp(`^(?:https?://(?:www.)?linkedin.com)?/(${SECTIONS.join("|")})(?:[/?#]|$)`, "i");
+  var PAGE_BODY = 'main, [role="main"], [role="dialog"], textarea, [contenteditable="true"]';
+  function sectionOf(anchor) {
+    var _a, _b, _c, _d;
+    return (_d = (_c = (_b = SECTION_PATH.exec((_a = anchor.getAttribute("href")) != null ? _a : "")) == null ? void 0 : _b[1]) == null ? void 0 : _c.toLowerCase()) != null ? _d : null;
+  }
+  function sectionCount(container) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const anchor of container.querySelectorAll("a[href]")) {
+      const section = sectionOf(anchor);
+      if (section) seen.add(section);
+    }
+    return seen.size;
+  }
+  function looksLikeBar(element) {
+    if (["HEADER", "NAV", "FOOTER"].includes(element.tagName)) return true;
+    const role = element.getAttribute("role");
+    if (role === "navigation" || role === "banner") return true;
+    const position = getComputedStyle(element).position;
+    return position === "fixed" || position === "sticky";
+  }
+  function siteBarFor(anchor) {
+    let node = anchor.parentElement;
+    for (let hop = 0; node !== null && hop < 10; hop += 1) {
+      if (node === document.body || node.matches(PAGE_BODY) || node.querySelector(PAGE_BODY)) return null;
+      if (looksLikeBar(node) && sectionCount(node) >= 2) return node;
       node = node.parentElement;
     }
-    return false;
+    return null;
   }
-  function relabel(root) {
-    var _a, _b;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
-      if (/^\s*my network\s*$/i.test((_a = text.textContent) != null ? _a : "")) text.textContent = ((_b = text.textContent) != null ? _b : "").replace(/my network/i, "Profile");
-    }
-    for (const element of [root, ...root.querySelectorAll("[aria-label]")]) {
-      const label = element.getAttribute("aria-label");
-      if (label && /my network/i.test(label)) element.setAttribute("aria-label", label.replace(/my network/i, "Profile"));
-    }
-  }
-  function swapIcon(root) {
-    var _a, _b;
-    const icon = root.querySelector("svg, li-icon, img");
-    if (!icon) return;
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", (_a = icon.getAttribute("width")) != null ? _a : "24");
-    svg.setAttribute("height", (_b = icon.getAttribute("height")) != null ? _b : "24");
-    svg.setAttribute("aria-hidden", "true");
-    svg.innerHTML = PERSON_ICON;
-    icon.replaceWith(svg);
-  }
-  var addProfileItem = () => {
-    var _a;
-    for (const network of document.querySelectorAll('a[href^="/mynetwork"], a[href*="linkedin.com/mynetwork"]')) {
-      if (network.closest(`[${PROFILE_ITEM_ATTR}], [${HIDDEN_ATTR}]`) || !isBottomBar(network)) continue;
-      const item = ((_a = network.parentElement) == null ? void 0 : _a.tagName) === "LI" ? network.parentElement : network;
-      const bar = item.parentElement;
-      if (!bar) continue;
-      const existing = bar.querySelector(`:scope > [${PROFILE_ITEM_ATTR}]`);
-      if (existing) {
-        if (bar.firstElementChild !== existing) bar.insertBefore(existing, bar.firstElementChild);
-        continue;
-      }
-      const copy = item.cloneNode(true);
-      copy.setAttribute(PROFILE_ITEM_ATTR, "");
-      const link = copy.matches("a") ? copy : copy.querySelector("a");
-      if (!link) continue;
-      link.setAttribute("href", "/in/me/");
-      link.removeAttribute("aria-current");
-      link.removeAttribute("id");
-      for (const marked of copy.querySelectorAll("[id]")) marked.removeAttribute("id");
-      relabel(copy);
-      swapIcon(copy);
-      bar.insertBefore(copy, bar.firstElementChild);
+  var hideOwnBars = () => {
+    if (!globalThis.ReactNativeWebView) return;
+    for (const anchor of document.querySelectorAll("a[href]")) {
+      if (!sectionOf(anchor) || anchor.closest(`[${HIDDEN_ATTR}]`)) continue;
+      const bar = siteBarFor(anchor);
+      if (bar) hide(bar);
     }
   };
   function isFeedPage(pathname) {
@@ -800,7 +801,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       hideBannersAndUpsells,
       hideCountTexts,
       hideHomeItem,
-      addProfileItem,
+      hideOwnBars,
       hideFeedBehindComposer,
       trackComposer,
       detectOwnProfile

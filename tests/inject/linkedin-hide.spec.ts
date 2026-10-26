@@ -46,11 +46,10 @@ test('messaging fixture: the bar stays without Home, the thread survives, routes
   await prepare(page);
   await page.goto('https://www.linkedin.com/messaging/');
 
-  // LinkedIn's own bar stays (Denis, 15 Oct 2026); only the way to the feed goes.
-  await expect(page.locator('header[role="banner"]')).toBeVisible();
+  // The app draws its own bars now (Denis, 25 Oct 2026), so LinkedIn's go.
+  await expect(page.locator('header[role="banner"]')).toBeHidden();
   await expect(page.locator('a[href="/feed/"]')).toBeHidden();
-  await expect(page.locator('a[href="/mynetwork/"]')).toBeVisible();
-  await expect(page.locator('a[href="/notifications/"]')).toBeVisible();
+  await expect(page.locator('a[href="/mynetwork/"]')).toBeHidden();
   await expect(page.locator('.app-install-banner')).toBeHidden();
   await expect(page.getByText('Hey, are we still on for Thursday?')).toBeVisible();
   await expect(page.locator('main.messaging-thread')).toBeVisible();
@@ -170,7 +169,8 @@ test('own profile fixture: the bar Home button hides, a page tab called Home sta
   await page.goto('https://www.linkedin.com/in/me/');
 
   await expect(page.locator('.bar-home')).toBeHidden();
-  await expect(page.locator('.bar-network[href="/mynetwork/"]')).toBeVisible();
+  // The whole site bar goes now that the app has its own (Denis, 25 Oct 2026).
+  await expect(page.locator('.bar-network[href="/mynetwork/"]')).toBeHidden();
   await expect(page.locator('.company-tabs .tab')).toBeVisible();
 });
 
@@ -205,7 +205,8 @@ test('get the app prompts: the bottom banner hides, pop-ups close, messages stay
   // The pop-up without one is hidden with its backdrop, and scrolling comes back.
   await expect(page.locator('.backdrop-two')).toBeHidden();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
-  await expect(page.locator('header[role="banner"]')).toBeVisible();
+  // LinkedIn's own top bar goes too; the app has its own (Denis, 25 Oct 2026).
+  await expect(page.locator('header[role="banner"]')).toBeHidden();
   await expect(page.getByText('Can you send me the deck before Friday?')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download the deck' })).toBeVisible();
 });
@@ -236,48 +237,42 @@ test('post composer: the bare feed without a composer still bounces to Messages'
   await page.waitForURL('https://www.linkedin.com/messaging/');
 });
 
-// Profile at the bottom left (Denis, 25 Oct 2026).
-test('bottom bar: Profile is the first item, pointing at the own profile, My Network stays', async ({ page }) => {
+// The app's own bars (Denis, 25 Oct 2026): LinkedIn's top and bottom bars go,
+// the page itself stays.
+test('own bars: the top header and the pinned bottom bar hide, the thread stays', async ({ page }) => {
   await routeFixture(page, 'linkedin-bottom-bar.html');
   await prepare(page);
   await page.goto('https://www.linkedin.com/messaging/');
-  const firstItem = page.locator('nav.bottom-nav ul > li').first();
-  await expect(firstItem).toHaveAttribute('data-unfeed-profile', '');
-  const profile = page.locator('nav.bottom-nav a[href="/in/me/"]');
-  await expect(profile).toHaveCount(1);
-  await expect(profile).toBeVisible();
-  await expect(profile).toHaveText('Profile');
-  await expect(profile).toHaveAttribute('aria-label', 'Profile');
-  await expect(profile.locator('svg')).toHaveCount(1);
-  await expect(profile.locator('li-icon')).toHaveCount(0);
-  // The copy never carries the original's id.
-  await expect(page.locator('#nav-network')).toHaveCount(1);
-  // Home is hidden, so Profile is the leftmost visible item, then My Network.
-  await expect(page.locator('nav.bottom-nav a[href="/feed/"]')).toBeHidden();
-  const network = page.locator('nav.bottom-nav a[href="/mynetwork/"]');
-  await expect(network).toBeVisible();
-  const profileBox = await profile.boundingBox();
-  const networkBox = await network.boundingBox();
-  expect(profileBox && networkBox && profileBox.x < networkBox.x).toBe(true);
+  await expect(page.locator('header.top-bar')).toBeHidden();
+  await expect(page.locator('nav.bottom-nav')).toBeHidden();
+  await expect(page.getByText('See you at nine.')).toBeVisible();
+  // Nothing of the old Profile item copy is added any more.
+  await expect(page.locator('[data-unfeed-profile]')).toHaveCount(0);
 });
 
-test('bottom bar: the top header never gets a Profile item, and it is added only once', async ({ page }) => {
-  await routeFixture(page, 'linkedin-bottom-bar.html');
-  await prepare(page);
-  await page.goto('https://www.linkedin.com/messaging/');
-  await expect(page.locator('nav.bottom-nav a[href="/in/me/"]')).toHaveCount(1);
-  await expect(page.locator('header a[href="/in/me/"]')).toHaveCount(0);
-  // Page changes run the sweep again; still exactly one.
-  await page.evaluate(() => document.querySelector('main')?.append(document.createElement('p')));
-  await page.waitForTimeout(300);
-  await expect(page.locator('a[href="/in/me/"]')).toHaveCount(1);
-});
-
-test('bottom bar: a bar without a list gets Profile first too', async ({ page }) => {
+test('own bars: a bar without a list or nav element hides too', async ({ page }) => {
   await routeFixture(page, 'linkedin-own-profile.html');
   await prepare(page);
   await page.goto('https://www.linkedin.com/in/me/');
-  const bar = page.locator('div.bottom-bar');
-  await expect(bar.locator('a[href="/in/me/"]')).toHaveText('Profile');
-  await expect(bar.locator(':scope > *').first()).toHaveAttribute('data-unfeed-profile', '');
+  await expect(page.locator('div.bottom-bar')).toBeHidden();
+  await expect(page.locator('h1.profile-name')).toBeVisible();
+  await expect(page.locator('.company-tabs .tab')).toBeVisible();
+});
+
+test('own bars: a header with a single link back to Messages is page content and stays', async ({ page }) => {
+  await routeFixture(page, 'linkedin-profile.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/in/someone/');
+  await expect(page.locator('header[role="banner"] a[href="/messaging/"]')).toBeVisible();
+  await expect(page.locator('h1.profile-name')).toBeVisible();
+});
+
+test('theme: the page gets the app colours through LinkedIn variables only', async ({ page }) => {
+  await routeFixture(page, 'linkedin-messaging.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/messaging/');
+  const canvas = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-background-canvas').trim());
+  expect(canvas).toBe('#0b0b0d');
+  // The body itself is never forced dark, so unknown text colours stay readable.
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 });
