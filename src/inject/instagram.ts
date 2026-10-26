@@ -305,6 +305,107 @@ const silenceHiddenPage: HideSweep = () => {
   if ((globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__ === 'stories-tray') silenceVideos();
 };
 
+/** Sound for videos (Denis, 25 Oct 2026). Instagram's site starts every
+ * video muted, so DM videos and stories played silent even with the audio
+ * mode set (src/state/audio.ts). When a video starts it gets its sound, once:
+ * through Instagram's own sound button when that shows sound off, otherwise
+ * by unmuting the video itself. The moment Denis taps a sound button or mutes
+ * a video himself, the app leaves sound alone until the page reloads. */
+const SOUND_OFF_LABEL = /^(audio is muted|audio muted|unmute|sound off|turn sound on|play sound)$/i;
+const SOUND_CONTROL_LABEL =
+  /^(audio is muted|audio muted|audio is playing|toggle audio|unmute|mute|sound off|sound on|turn sound on|turn sound off|play sound)$/i;
+
+interface SoundState {
+  /** Denis chose for himself: never touch sound again on this page. */
+  userChose: boolean;
+  /** Volume changes before this time are the app's own, not Denis's. */
+  ourChangeUntil: number;
+  given: WeakSet<HTMLVideoElement>;
+}
+
+function ariaLabel(element: Element): string {
+  return (element.getAttribute('aria-label') ?? '').trim();
+}
+
+function press(element: Element): void {
+  if (element instanceof HTMLElement) element.click();
+  else element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+}
+
+/** Instagram's own sound button for this video, when it says sound is off.
+ * Only looked for in containers that hold this one video, so a button that
+ * belongs to another video in the thread is never pressed. */
+function soundOffButton(video: HTMLVideoElement): Element | null {
+  let node: Element | null = video.parentElement;
+  for (let hop = 0; node !== null && hop < 8; hop += 1) {
+    if (node.querySelectorAll('video').length > 1) return null;
+    for (const candidate of node.querySelectorAll('[aria-label]')) {
+      if (SOUND_OFF_LABEL.test(ariaLabel(candidate))) return candidate.closest('button, [role="button"]') ?? candidate;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function unmute(video: HTMLVideoElement, state: SoundState): void {
+  state.ourChangeUntil = Date.now() + 800;
+  video.muted = false;
+  video.volume = 1;
+}
+
+function giveSound(video: HTMLVideoElement, state: SoundState): void {
+  state.given.add(video);
+  const button = soundOffButton(video);
+  if (!button) {
+    unmute(video, state);
+    return;
+  }
+  state.ourChangeUntil = Date.now() + 800;
+  press(button);
+  // The site's button normally unmutes the video; if it did not, do it here.
+  window.setTimeout(() => {
+    if (!state.userChose && video.muted) unmute(video, state);
+  }, 300);
+}
+
+function installVideoSound(): void {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  const state: SoundState = { userChose: false, ourChangeUntil: 0, given: new WeakSet() };
+  const hiddenReader = () => (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__ === 'stories-tray';
+  document.addEventListener(
+    'play',
+    (event) => {
+      const video = event.target;
+      if (!(video instanceof HTMLVideoElement)) return;
+      if (hiddenReader()) {
+        silenceVideos();
+        return;
+      }
+      if (state.userChose || state.given.has(video)) return;
+      giveSound(video, state);
+    },
+    true,
+  );
+  document.addEventListener(
+    'volumechange',
+    (event) => {
+      const video = event.target;
+      if (!(video instanceof HTMLVideoElement) || Date.now() < state.ourChangeUntil) return;
+      if (state.given.has(video) && (video.muted || video.volume === 0)) state.userChose = true;
+    },
+    true,
+  );
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (!event.isTrusted || !(event.target instanceof Element)) return;
+      const control = event.target.closest('[aria-label]');
+      if (control && SOUND_CONTROL_LABEL.test(ariaLabel(control))) state.userChose = true;
+    },
+    true,
+  );
+}
+
 /** Instagram's own create controls, newest labels first. */
 const CREATE_LABEL = /^(new post|create|new|post)$/i;
 
@@ -376,6 +477,7 @@ function installCreateHook(): void {
 }
 
 installCreateHook();
+installVideoSound();
 watchStoriesTray();
 
 setupInject('instagram', {

@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- A DM thread with videos the way Instagram's site serves them (Denis,
+     25 Oct 2026): every video starts muted. The first has Instagram's own
+     sound button, which toggles the video and its label; the others have
+     none. Fake hashed class names only. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Instagram</title>
+  </head>
+  <body>
+    <main aria-label="Conversation" class="x78zum5 hashed-thread">
+      <div aria-label="Message from alice" class="x1gslohp hashed-message">
+        <div class="x1n2onr6 hashed-player">
+          <video id="with-button" muted playsinline class="xh8yej3"></video>
+          <div role="button" aria-label="Toggle audio" class="x1i10hfl hashed-sound" tabindex="0">
+            <svg aria-label="Audio is muted" viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="8" /></svg>
+          </div>
+        </div>
+      </div>
+      <div aria-label="Message from bob" class="x1gslohp hashed-message">
+        <video id="plain" muted class="xh8yej3"></video>
+      </div>
+      <div aria-label="Message from cara" class="x1gslohp hashed-message">
+        <video id="later" muted class="xh8yej3"></video>
+      </div>
+    </main>
+    <script>
+      window.__sitePresses = 0;
+      const toggle = document.querySelector('[aria-label="Toggle audio"]');
+      toggle.addEventListener('click', () => {
+        const video = document.getElementById('with-button');
+        video.muted = !video.muted;
+        toggle.querySelector('svg').setAttribute('aria-label', video.muted ? 'Audio is muted' : 'Audio is playing');
+        window.__sitePresses += 1;
+      });
+    </script>
+  </body>
+</html>
