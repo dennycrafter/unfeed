@@ -114,9 +114,9 @@ test('linkedin userscript: search fixture hides posts, keeps people', async ({ p
   await expect(page.locator('section.search-results__people')).toBeVisible();
 });
 
-test('linkedin userscript: profile fixture hides activity and suggestions', async ({ page }) => {
+test('linkedin userscript: profile fixture hides suggestions and keeps Activity', async ({ page }) => {
   await openFixture(page, 'linkedin', 'www.linkedin.com', '/in/someone/', LINKEDIN_ROUTES);
-  await expect(page.locator('section.profile-activity')).toBeHidden();
+  await expect(page.locator('section.profile-activity')).toBeVisible();
   await expect(page.locator('section.profile-suggestions')).toBeHidden();
   await expect(page.locator('h1.profile-name')).toBeVisible();
   // hideCounts defaults to off, same as the app's default.

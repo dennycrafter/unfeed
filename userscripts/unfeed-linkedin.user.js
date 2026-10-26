@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.2.0
+// @version 1.3.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*
@@ -528,12 +528,8 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         hide((_d = (_c = heading.closest("section")) != null ? _c : heading.closest("div")) != null ? _d : heading);
       }
     }
-    hideAllMatching(
-      document,
-      '[data-urn^="urn:li:share"], [data-urn^="urn:li:activity"], [data-urn^="urn:li:ugcPost"]'
-    );
   };
-  var PROFILE_HEADING_TEXTS = ["activity", "more profiles for you", "people you may know"];
+  var PROFILE_HEADING_TEXTS = ["more profiles for you", "people you may know"];
   var hideProfileSuggestions = () => {
     var _a, _b, _c;
     if (!isOnProfilePage()) return;
@@ -651,8 +647,11 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       if (inSiteBar(item)) hide(item);
     }
   };
+  function isFeedPage(pathname) {
+    return pathname.toLowerCase().replace(/\/{2,}/g, "/").replace(/\/?$/, "/") === "/feed/";
+  }
   var hideFeedBehindComposer = () => {
-    if (!location.pathname.toLowerCase().startsWith("/feed")) return;
+    if (!isFeedPage(location.pathname)) return;
     hideAllMatching(
       document,
       '[data-urn^="urn:li:activity"], [data-urn^="urn:li:share"], [data-urn^="urn:li:ugcPost"], [data-id^="urn:li:activity"]'
