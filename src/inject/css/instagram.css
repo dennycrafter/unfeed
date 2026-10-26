@@ -19,8 +19,9 @@ a[href="/"]:has(svg[aria-label="Instagram"]) {
   display: none !important;
 }
 
-/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */
-a[href^="/reels/"],
+/* @unfeed-rule ig-feed-links -- links to the Reels tab or Explore, including inside DM threads. A single reel a friend sends stays (Denis, 25 Oct 2026) */
+a[href="/reels/"],
+a[href="/reels"],
 a[href^="/explore/"] {
   display: none !important;
 }

@@ -68,11 +68,13 @@ test('instagram userscript: search fixture matches the in app results', async ({
   await expect(page.locator('a[href="/tv/gridsix/"]')).toBeHidden();
 });
 
-test('instagram userscript: dm fixture keeps the thread and hides reels and banners', async ({ page }) => {
+test('instagram userscript: dm fixture keeps the thread and shared reels, hides the Reels tab and banners', async ({ page }) => {
   await openFixture(page, 'instagram', 'www.instagram.com', '/direct/inbox/', INSTAGRAM_ROUTES);
   await expect(page.locator('main[aria-label="Conversation"]')).toBeVisible();
   await expect(page.locator('[aria-label="Message from alice"]').first()).toBeVisible();
-  await expect(page.locator('a[href="/reels/abc123/"]')).toBeHidden();
+  await expect(page.locator('nav a[href="/reels/"]')).toBeHidden();
+  // A single reel a friend sends stays (Denis, 25 Oct 2026).
+  await expect(page.locator('a[href="/reels/abc123/"]')).toBeVisible();
   await expect(page.locator('aside.hashed-app-banner')).toBeHidden();
 });
 

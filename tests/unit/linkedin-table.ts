@@ -70,31 +70,27 @@ export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
     url: 'https://www.linkedin.com/mynetwork/invitation-manager/sent/',
     expected: ALLOW,
   },
-  // Shared posts (rule li-8), setting on and off
+  // Single posts (rule li-8-single-post): always allowed, a single post is
+  // not a feed (Denis, 25 Oct 2026).
+  { name: 'a single feed update allowed', url: 'https://www.linkedin.com/feed/update/urn:li:activity:1/', expected: ALLOW },
   {
-    name: 'a shared feed update allowed when shared posts on',
-    url: 'https://www.linkedin.com/feed/update/urn:li:activity:1/',
-    allowSharedPosts: true,
-    expected: ALLOW,
-  },
-  {
-    name: 'a shared feed update redirects when shared posts off',
+    name: 'a single feed update allowed with shared posts off',
     url: 'https://www.linkedin.com/feed/update/urn:li:activity:1/',
     allowSharedPosts: false,
-    expected: toMessaging,
-  },
-  {
-    name: 'a shared post page allowed when shared posts on',
-    url: 'https://www.linkedin.com/posts/someone-123/',
-    allowSharedPosts: true,
     expected: ALLOW,
   },
+  { name: 'a single share update allowed', url: 'https://www.linkedin.com/feed/update/urn:li:share:7/?commentUrn=x', expected: ALLOW },
+  { name: 'a single post page allowed', url: 'https://www.linkedin.com/posts/someone-123/', expected: ALLOW },
   {
-    name: 'a shared post page redirects when shared posts off',
+    name: 'a single post page allowed with shared posts off',
     url: 'https://www.linkedin.com/posts/someone-123/',
     allowSharedPosts: false,
-    expected: toMessaging,
+    expected: ALLOW,
   },
+  // Recent activity on a profile (Denis, 25 Oct 2026)
+  { name: 'recent activity allowed', url: 'https://www.linkedin.com/in/someone/recent-activity/', expected: ALLOW },
+  { name: 'recent activity posts allowed', url: 'https://www.linkedin.com/in/someone/recent-activity/all/', expected: ALLOW },
+  { name: 'recent activity comments allowed', url: 'https://www.linkedin.com/in/someone/recent-activity/comments/', expected: ALLOW },
   // The feed (rule li-9-feed)
   { name: 'the feed root redirects to Messages', url: 'https://www.linkedin.com/feed/', expected: toMessaging },
   { name: 'the feed without a trailing slash redirects', url: 'https://www.linkedin.com/feed', expected: toMessaging },

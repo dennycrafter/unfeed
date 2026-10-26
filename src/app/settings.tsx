@@ -226,12 +226,8 @@ export default function SettingsScreen() {
 
         <SectionLabel>Both apps</SectionLabel>
         <View style={styles.box}>
-          <ToggleRow
-            label="Open friends' shared posts"
-            value={settings.allowSharedPosts}
-            onToggle={(next) => updateSettings({ allowSharedPosts: next })}
-          />
-          <Divider />
+          {/* Single posts and reels always open now (Denis, 25 Oct 2026), so the
+              old shared posts switch is gone. */}
           <ToggleRow
             label="Hide like and follower counts"
             value={settings.hideCounts}

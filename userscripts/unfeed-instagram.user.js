@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed Instagram
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.1.0
+// @version 1.2.0
 // @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
 // @match https://instagram.com/*
 // @match https://www.instagram.com/*
@@ -35,8 +35,9 @@ a[href="/"]:has(svg[aria-label="Instagram"]) {
   display: none !important;
 }
 
-/* @unfeed-rule ig-feed-links -- links to Reels or Explore, including inside DM threads */
-a[href^="/reels/"],
+/* @unfeed-rule ig-feed-links -- links to the Reels tab or Explore, including inside DM threads. A single reel a friend sends stays (Denis, 25 Oct 2026) */
+a[href="/reels/"],
+a[href="/reels"],
 a[href^="/explore/"] {
   display: none !important;
 }
@@ -179,13 +180,15 @@ a[href$="/following/"] {
       { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
       { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
       { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },
-      { id: "ig-8-reels", match: { kind: "prefix", paths: ["/reels/"] }, action: "redirect", to: "/direct/inbox/" },
       {
-        id: "ig-9-shared-post",
-        match: { kind: "singleSegmentPrefix", prefixes: ["/reel/", "/p/", "/tv/"] },
-        action: "allowIfSharedPosts",
-        to: "/direct/inbox/"
+        id: "ig-8-single-reel",
+        match: { kind: "singleSegmentPrefix", prefixes: ["/reels/"] },
+        action: "redirect",
+        to: "/reel/",
+        keepRest: true
       },
+      { id: "ig-8-reels", match: { kind: "prefix", paths: ["/reels/"] }, action: "redirect", to: "/direct/inbox/" },
+      { id: "ig-9-single-post", match: { kind: "singleSegmentPrefix", prefixes: ["/reel/", "/p/", "/tv/"] }, action: "allow" },
       { id: "ig-10-profile", match: { kind: "username" }, action: "allow" },
       { id: "ig-11-fallback", match: { kind: "any" }, action: "allow" }
     ]
@@ -230,12 +233,7 @@ a[href$="/following/"] {
         match: { kind: "exact", paths: ["/feed/"], context: "composer" },
         action: "allow"
       },
-      {
-        id: "li-8-shared-post",
-        match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] },
-        action: "allowIfSharedPosts",
-        to: "/messaging/"
-      },
+      { id: "li-8-single-post", match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] }, action: "allow" },
       { id: "li-9-feed", match: { kind: "prefix", paths: ["/feed/"] }, action: "redirect", to: "/messaging/" },
       { id: "li-9-home", match: { kind: "home" }, action: "redirect", to: "/messaging/" },
       {
@@ -352,6 +350,12 @@ a[href$="/following/"] {
         if (!isStringArray(record.keepQuery)) fail(site, `rule ${id} keepQuery must be strings`);
         keepQuery = record.keepQuery;
       }
+      if (record.keepRest !== void 0) {
+        if (record.keepRest !== true) fail(site, `rule ${id} keepRest must be true when present`);
+        if (match.kind !== "singleSegmentPrefix" || action !== "redirect" || !String(record.to).endsWith("/")) {
+          fail(site, `rule ${id} keepRest needs a singleSegmentPrefix redirect whose to ends with /`);
+        }
+      }
       return {
         id,
         match: {
@@ -363,7 +367,8 @@ a[href$="/following/"] {
         },
         action,
         to,
-        keepQuery
+        keepQuery,
+        keepRest: record.keepRest === true ? true : void 0
       };
     });
     if (!rules2.some((rule) => rule.match.kind === "any")) fail(site, "rules must include an any fallback");
@@ -376,9 +381,14 @@ a[href$="/following/"] {
       rules: rules2
     };
   }
-  function redirectWithQuery(rule, url) {
-    var _a;
-    const to = (_a = rule.to) != null ? _a : "/";
+  function redirectWithQuery(rule, url, path) {
+    var _a, _b;
+    let to = (_a = rule.to) != null ? _a : "/";
+    if (rule.keepRest) {
+      const prefix = ((_b = rule.match.prefixes) != null ? _b : []).find((candidate) => path.startsWith(candidate));
+      const typed = url.pathname.replace(/\/{2,}/g, "/");
+      if (prefix) to += (typed.endsWith("/") ? typed : `${typed}/`).slice(prefix.length);
+    }
     if (!rule.keepQuery || rule.keepQuery.length === 0) {
       return { action: "redirect", to, rule: rule.id };
     }
@@ -423,8 +433,8 @@ a[href$="/following/"] {
     for (const rule of rules2.rules) {
       if (!ruleMatches(rule, path, context, url)) continue;
       if (rule.action === "allow") return { action: "allow", rule: rule.id };
-      if (rule.action === "redirect") return redirectWithQuery(rule, url);
-      return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url);
+      if (rule.action === "redirect") return redirectWithQuery(rule, url, path);
+      return settings.allowSharedPosts ? { action: "allow", rule: rule.id } : redirectWithQuery(rule, url, path);
     }
     return { action: "allow", rule: "unmatched-fallback" };
   }

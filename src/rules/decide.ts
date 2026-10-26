@@ -44,6 +44,9 @@ interface RouteRule {
   /** Query keys copied from the original URL onto a redirect target, for
    * example the keywords on a LinkedIn content search. */
   keepQuery?: string[];
+  /** singleSegmentPrefix rows only: the segment after the matched prefix is
+   * added to the target, for example /reels/abc/ to the single reel /reel/abc/. */
+  keepRest?: boolean;
 }
 
 interface HostPathRule {
@@ -174,6 +177,12 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
       if (!isStringArray(record.keepQuery)) fail(site, `rule ${id} keepQuery must be strings`);
       keepQuery = record.keepQuery;
     }
+    if (record.keepRest !== undefined) {
+      if (record.keepRest !== true) fail(site, `rule ${id} keepRest must be true when present`);
+      if (match.kind !== 'singleSegmentPrefix' || action !== 'redirect' || !String(record.to).endsWith('/')) {
+        fail(site, `rule ${id} keepRest needs a singleSegmentPrefix redirect whose to ends with /`);
+      }
+    }
     return {
       id,
       match: {
@@ -186,6 +195,7 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
       action,
       to,
       keepQuery,
+      keepRest: record.keepRest === true ? true : undefined,
     };
   });
   if (!rules.some((rule) => rule.match.kind === 'any')) fail(site, 'rules must include an any fallback');
@@ -212,8 +222,15 @@ export function toAbsoluteUrl(site: Site, path: string): string {
 
 /** Builds a redirect result, carrying the rule's keepQuery keys from the
  * original URL onto the target path. */
-function redirectWithQuery(rule: RouteRule, url: URL): DecideResult {
-  const to = rule.to ?? '/';
+function redirectWithQuery(rule: RouteRule, url: URL, path: string): DecideResult {
+  let to = rule.to ?? '/';
+  if (rule.keepRest) {
+    const prefix = (rule.match.prefixes ?? []).find((candidate) => path.startsWith(candidate));
+    // Codes are case sensitive (Instagram's reel codes), so the rest comes
+    // from the address as typed, not the lowercased match path.
+    const typed = url.pathname.replace(/\/{2,}/g, '/');
+    if (prefix) to += (typed.endsWith('/') ? typed : `${typed}/`).slice(prefix.length);
+  }
   if (!rule.keepQuery || rule.keepQuery.length === 0) {
     return { action: 'redirect', to, rule: rule.id };
   }
@@ -261,10 +278,10 @@ export function decide(site: Site, rawUrl: string, context: string, settings: De
   for (const rule of rules.rules) {
     if (!ruleMatches(rule, path, context, url)) continue;
     if (rule.action === 'allow') return { action: 'allow', rule: rule.id };
-    if (rule.action === 'redirect') return redirectWithQuery(rule, url);
+    if (rule.action === 'redirect') return redirectWithQuery(rule, url, path);
     return settings.allowSharedPosts
       ? { action: 'allow', rule: rule.id }
-      : redirectWithQuery(rule, url);
+      : redirectWithQuery(rule, url, path);
   }
   // parseSiteRules guarantees an any fallback row; this stays as a guard so a
   // bad rules file can never wedge navigation.

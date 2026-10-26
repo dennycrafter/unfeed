@@ -36,12 +36,7 @@
       "match": { "kind": "exact", "paths": ["/feed/"], "context": "composer" },
       "action": "allow"
     },
-    {
-      "id": "li-8-shared-post",
-      "match": { "kind": "prefix", "paths": ["/feed/update/", "/posts/"] },
-      "action": "allowIfSharedPosts",
-      "to": "/messaging/"
-    },
+    { "id": "li-8-single-post", "match": { "kind": "prefix", "paths": ["/feed/update/", "/posts/"] }, "action": "allow" },
     { "id": "li-9-feed", "match": { "kind": "prefix", "paths": ["/feed/"] }, "action": "redirect", "to": "/messaging/" },
     { "id": "li-9-home", "match": { "kind": "home" }, "action": "redirect", "to": "/messaging/" },
     {

@@ -12,7 +12,7 @@ const BOTH_UNREAD = '/?unreadInstagram=3&unreadLinkedin=2';
 test.describe('settings and switcher at phone size', () => {
   test('settings screen shows every row', async ({ page }) => {
     await page.goto('/settings');
-    await expect(page.getByText("Open friends' shared posts")).toBeVisible();
+    await expect(page.getByText("Open friends' shared posts")).toHaveCount(0);
     await expect(page.getByText('Hide like and follower counts')).toBeVisible();
     await expect(page.getByText('Haptics')).toBeVisible();
     await expect(page.getByText('Reset to defaults')).toBeVisible();
