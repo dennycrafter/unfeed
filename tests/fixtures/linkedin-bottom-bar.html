@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- LinkedIn's mobile web bars (Denis, 25 Oct 2026): a top header that also
+     links to My Network, and the bottom bar pinned to the screen with Home,
+     My Network, Post, Notifications and Jobs as icon plus label items in a
+     list. Profile must arrive at the bottom left, in the bottom bar only.
+     Class names are fake hashes. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Messaging | LinkedIn</title>
+  </head>
+  <body>
+    <header class="top-bar Wq3kz1">
+      <a class="top-network Hd73ka" href="/mynetwork/">My Network</a>
+      <a class="top-messaging Hd73ka" href="/messaging/">Messaging</a>
+    </header>
+    <main class="messaging Pq81ns">
+      <p class="msg-bubble Lk2m0a">See you at nine.</p>
+    </main>
+    <nav class="bottom-nav Rt5kd2" aria-label="Primary Navigation" style="position: fixed; bottom: 0; left: 0; right: 0; height: 56px">
+      <ul class="bottom-nav__list Ka81md" style="display: flex; margin: 0; padding: 0; list-style: none">
+        <li class="item Mx72kq"><a class="link Bn4ks0" href="/feed/"><li-icon type="home"><svg width="24" height="24" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2"></rect></svg></li-icon><span class="label Vb2kq8">Home</span></a></li>
+        <li class="item Mx72kq"><a class="link Bn4ks0" href="/mynetwork/" aria-label="My Network" id="nav-network"><li-icon type="people"><svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle></svg></li-icon><span class="label Vb2kq8">My Network</span></a></li>
+        <li class="item Mx72kq"><button class="link Bn4ks0" type="button"><span class="label Vb2kq8">Post</span></button></li>
+        <li class="item Mx72kq"><a class="link Bn4ks0" href="/notifications/"><span class="label Vb2kq8">Notifications</span></a></li>
+        <li class="item Mx72kq"><a class="link Bn4ks0" href="/jobs/"><span class="label Vb2kq8">Jobs</span></a></li>
+      </ul>
+    </nav>
+  </body>
+</html>

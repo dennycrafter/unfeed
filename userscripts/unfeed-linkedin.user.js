@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed LinkedIn
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.5.0
+// @version 1.6.0
 // @description LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.
 // @match https://linkedin.com/*
 // @match https://www.linkedin.com/*
@@ -647,6 +647,69 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       if (inSiteBar(item)) hide(item);
     }
   };
+  var PROFILE_ITEM_ATTR = "data-unfeed-profile";
+  var PERSON_ICON = '<circle cx="12" cy="7.5" r="4" fill="currentColor"></circle><path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5z" fill="currentColor"></path>';
+  function isBottomBar(element) {
+    if (element.closest("header")) return false;
+    let node = element;
+    for (let hop = 0; node !== null && hop < 8; hop += 1) {
+      const position = getComputedStyle(node).position;
+      if (position === "fixed" || position === "sticky") {
+        const rect = node.getBoundingClientRect();
+        return rect.top > window.innerHeight / 2;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }
+  function relabel(root) {
+    var _a, _b;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
+      if (/^\s*my network\s*$/i.test((_a = text.textContent) != null ? _a : "")) text.textContent = ((_b = text.textContent) != null ? _b : "").replace(/my network/i, "Profile");
+    }
+    for (const element of [root, ...root.querySelectorAll("[aria-label]")]) {
+      const label = element.getAttribute("aria-label");
+      if (label && /my network/i.test(label)) element.setAttribute("aria-label", label.replace(/my network/i, "Profile"));
+    }
+  }
+  function swapIcon(root) {
+    var _a, _b;
+    const icon = root.querySelector("svg, li-icon, img");
+    if (!icon) return;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", (_a = icon.getAttribute("width")) != null ? _a : "24");
+    svg.setAttribute("height", (_b = icon.getAttribute("height")) != null ? _b : "24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = PERSON_ICON;
+    icon.replaceWith(svg);
+  }
+  var addProfileItem = () => {
+    var _a;
+    for (const network of document.querySelectorAll('a[href^="/mynetwork"], a[href*="linkedin.com/mynetwork"]')) {
+      if (network.closest(`[${PROFILE_ITEM_ATTR}], [${HIDDEN_ATTR}]`) || !isBottomBar(network)) continue;
+      const item = ((_a = network.parentElement) == null ? void 0 : _a.tagName) === "LI" ? network.parentElement : network;
+      const bar = item.parentElement;
+      if (!bar) continue;
+      const existing = bar.querySelector(`:scope > [${PROFILE_ITEM_ATTR}]`);
+      if (existing) {
+        if (bar.firstElementChild !== existing) bar.insertBefore(existing, bar.firstElementChild);
+        continue;
+      }
+      const copy = item.cloneNode(true);
+      copy.setAttribute(PROFILE_ITEM_ATTR, "");
+      const link = copy.matches("a") ? copy : copy.querySelector("a");
+      if (!link) continue;
+      link.setAttribute("href", "/in/me/");
+      link.removeAttribute("aria-current");
+      link.removeAttribute("id");
+      for (const marked of copy.querySelectorAll("[id]")) marked.removeAttribute("id");
+      relabel(copy);
+      swapIcon(copy);
+      bar.insertBefore(copy, bar.firstElementChild);
+    }
+  };
   function isFeedPage(pathname) {
     return pathname.toLowerCase().replace(/\/{2,}/g, "/").replace(/\/?$/, "/") === "/feed/";
   }
@@ -731,6 +794,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       hideBannersAndUpsells,
       hideCountTexts,
       hideHomeItem,
+      addProfileItem,
       hideFeedBehindComposer,
       trackComposer,
       detectOwnProfile

@@ -170,7 +170,7 @@ test('own profile fixture: the bar Home button hides, a page tab called Home sta
   await page.goto('https://www.linkedin.com/in/me/');
 
   await expect(page.locator('.bar-home')).toBeHidden();
-  await expect(page.locator('.bar-network')).toBeVisible();
+  await expect(page.locator('.bar-network[href="/mynetwork/"]')).toBeVisible();
   await expect(page.locator('.company-tabs .tab')).toBeVisible();
 });
 
@@ -234,4 +234,50 @@ test('post composer: the bare feed without a composer still bounces to Messages'
   await prepare(page);
   await page.goto('https://www.linkedin.com/feed/');
   await page.waitForURL('https://www.linkedin.com/messaging/');
+});
+
+// Profile at the bottom left (Denis, 25 Oct 2026).
+test('bottom bar: Profile is the first item, pointing at the own profile, My Network stays', async ({ page }) => {
+  await routeFixture(page, 'linkedin-bottom-bar.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/messaging/');
+  const firstItem = page.locator('nav.bottom-nav ul > li').first();
+  await expect(firstItem).toHaveAttribute('data-unfeed-profile', '');
+  const profile = page.locator('nav.bottom-nav a[href="/in/me/"]');
+  await expect(profile).toHaveCount(1);
+  await expect(profile).toBeVisible();
+  await expect(profile).toHaveText('Profile');
+  await expect(profile).toHaveAttribute('aria-label', 'Profile');
+  await expect(profile.locator('svg')).toHaveCount(1);
+  await expect(profile.locator('li-icon')).toHaveCount(0);
+  // The copy never carries the original's id.
+  await expect(page.locator('#nav-network')).toHaveCount(1);
+  // Home is hidden, so Profile is the leftmost visible item, then My Network.
+  await expect(page.locator('nav.bottom-nav a[href="/feed/"]')).toBeHidden();
+  const network = page.locator('nav.bottom-nav a[href="/mynetwork/"]');
+  await expect(network).toBeVisible();
+  const profileBox = await profile.boundingBox();
+  const networkBox = await network.boundingBox();
+  expect(profileBox && networkBox && profileBox.x < networkBox.x).toBe(true);
+});
+
+test('bottom bar: the top header never gets a Profile item, and it is added only once', async ({ page }) => {
+  await routeFixture(page, 'linkedin-bottom-bar.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/messaging/');
+  await expect(page.locator('nav.bottom-nav a[href="/in/me/"]')).toHaveCount(1);
+  await expect(page.locator('header a[href="/in/me/"]')).toHaveCount(0);
+  // Page changes run the sweep again; still exactly one.
+  await page.evaluate(() => document.querySelector('main')?.append(document.createElement('p')));
+  await page.waitForTimeout(300);
+  await expect(page.locator('a[href="/in/me/"]')).toHaveCount(1);
+});
+
+test('bottom bar: a bar without a list gets Profile first too', async ({ page }) => {
+  await routeFixture(page, 'linkedin-own-profile.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/in/me/');
+  const bar = page.locator('div.bottom-bar');
+  await expect(bar.locator('a[href="/in/me/"]')).toHaveText('Profile');
+  await expect(bar.locator(':scope > *').first()).toHaveAttribute('data-unfeed-profile', '');
 });
