@@ -22,7 +22,11 @@ export const INSTAGRAM_DECIDE_TABLE: DecideRow[] = [
   { name: 'home root redirects to DMs', url: 'https://www.instagram.com/', expected: toInbox },
   { name: 'bare host home redirects to DMs', url: 'https://instagram.com/', expected: toInbox },
   { name: 'mobile host home redirects to DMs', url: 'https://m.instagram.com/', expected: toInbox },
-  { name: 'home in stories context is allowed', url: 'https://www.instagram.com/', context: 'stories', expected: ALLOW },
+  // Stories (Denis, 25 Oct 2026): home only loads in the hidden tray reader.
+  // The visible web view never shows it, even while watching stories.
+  { name: 'home in the hidden stories tray reader is allowed', url: 'https://www.instagram.com/', context: 'stories-tray', expected: ALLOW },
+  { name: 'home while watching stories redirects', url: 'https://www.instagram.com/', context: 'stories', expected: toInbox },
+  { name: 'home in the page context redirects', url: 'https://www.instagram.com/', context: 'page', expected: toInbox },
   { name: 'home with a query string still redirects', url: 'https://www.instagram.com/?hl=en', expected: toInbox },
   // DMs (rule 2)
   { name: 'dm inbox allowed', url: 'https://www.instagram.com/direct/inbox/', expected: ALLOW },

@@ -76,43 +76,76 @@ async function messages(page: Page): Promise<PageMessageRecord[]> {
   );
 }
 
-test('home fixture: feed hidden, stories tray visible, own nav hidden', async ({ page }) => {
-  // The home page only loads in stories context (charter section 8.6), so the
-  // guard sees a stories visit and lets it through.
-  await openFixture(page, '/', { context: 'stories' });
+test('home in the hidden tray reader: nothing on the page is visible, the tray is posted to native', async ({ page }) => {
+  // Home only loads in the hidden stories tray reader (Denis, 25 Oct 2026).
+  await openFixture(page, '/', { context: 'stories-tray' });
   await waitForMessage(page, { type: 'route', url: 'https://www.instagram.com/' });
-  await expect(page.locator('[aria-label="Stories tray"]')).toBeVisible();
+  await waitForMessage(page, {
+    type: 'ig-stories',
+    items: [
+      { username: 'alice', avatar: 'https://www.instagram.com/alice.jpg' },
+      { username: 'bob', avatar: 'https://www.instagram.com/bob.jpg' },
+      { username: 'cara', avatar: 'https://www.instagram.com/cara.jpg' },
+    ],
+    done: true,
+  });
+  // Not a single part of home paints, the tray included: native draws its own.
+  await expect(page.locator('[aria-label="Stories tray"]')).toBeHidden();
   await expect(page.locator('article', { hasText: 'Feed post one' })).toBeHidden();
   await expect(page.locator('article', { hasText: 'Feed post two' })).toBeHidden();
   await expect(page.locator('[aria-label="Suggested for you"]')).toBeHidden();
   await expect(page.locator('nav[aria-label="Primary"]')).toBeHidden();
+  expect(await page.evaluate(() => getComputedStyle(document.body).visibility)).toBe('hidden');
 });
 
-test('stories button: tray and feed in one wrapper, only the tray shows', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories', fixture: 'instagram-home-nested.html' });
-  await expect(page.locator('[aria-label="Story by alice, not seen"]')).toBeVisible();
-  await expect(page.locator('[aria-label="Your story"]')).toBeVisible();
+test('tray reader: labels with seen states and Your story, tray and feed in one wrapper', async ({ page }) => {
+  await openFixture(page, '/', { context: 'stories-tray', fixture: 'instagram-home-nested.html' });
+  await waitForMessage(page, {
+    type: 'ig-stories',
+    items: [
+      { username: 'alice', avatar: null },
+      { username: 'bob', avatar: null },
+    ],
+    done: true,
+  });
   await expect(page.locator('.feed-post').first()).toBeHidden();
-  await expect(page.locator('.feed-post').nth(1)).toBeHidden();
-  await expect(page.locator('#unfeed-stories-note')).toHaveCount(0);
+  await expect(page.locator('[aria-label="Story by alice, not seen"]')).toBeHidden();
 });
 
-test('stories button: a home page with no stories says so instead of showing the feed', async ({ page }) => {
+test('tray reader: a home page with no stories reports an empty tray, never the feed', async ({ page }) => {
   await page.clock.install();
-  await openFixture(page, '/', { context: 'stories', fixture: 'instagram-post.html' });
+  await openFixture(page, '/', { context: 'stories-tray', fixture: 'instagram-post.html' });
   await expect(page.locator('main').first()).toBeHidden();
-  await page.clock.runFor(9000);
-  await expect(page.locator('#unfeed-stories-note')).toBeVisible();
+  await page.clock.runFor(11000);
+  await waitForMessage(page, { type: 'ig-stories', items: [], done: true });
+});
+
+test('watching stories: a move to home is sent away and the page stays blank meanwhile', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'stories' });
+  // The story viewer closing pushes home; the feed must not paint for a frame.
+  const blankAtPush = await page.evaluate(() => {
+    history.pushState({}, '', '/');
+    return getComputedStyle(document.body).visibility;
+  });
+  expect(blankAtPush).toBe('hidden');
+  await page.waitForURL('https://www.instagram.com/direct/inbox/');
+});
+
+test('the tray reader never runs in the visible web view', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  await page.waitForTimeout(1000);
+  const types = (await messages(page)).map((message) => message.type);
+  expect(types).not.toContain('ig-stories');
 });
 
 test('videos are kept inline so iOS never takes them full screen', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories', fixture: 'instagram-home-nested.html' });
+  await openFixture(page, '/', { context: 'stories-tray', fixture: 'instagram-home-nested.html' });
   await expect(page.locator('video.feed-video')).toHaveAttribute('playsinline', '');
   await expect(page.locator('video.feed-video')).toHaveAttribute('webkit-playsinline', '');
 });
 
 test('home fixture: unread count and username are reported', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories' });
+  await openFixture(page, '/', { context: 'stories-tray' });
   await waitForMessage(page, { type: 'unread', count: 3 });
   await waitForMessage(page, { type: 'ig-username', value: 'yourprofile' });
   const types = (await messages(page)).map((message) => message.type);
@@ -235,7 +268,7 @@ test('hideCounts setting hides follower and like counts on request', async ({ pa
 });
 
 test('per rule match counts are exposed for the debug screen', async ({ page }) => {
-  await openFixture(page, '/', { context: 'stories' });
+  await openFixture(page, '/', { context: 'stories-tray' });
   await waitForMessage(page, { type: 'hide-stats' });
   // Stats posted at document-start see an empty page; wait until the
   // observer tick after the first rendered frame reports real counts.

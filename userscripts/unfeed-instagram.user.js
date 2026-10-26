@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed Instagram
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.3.0
+// @version 1.4.0
 // @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
 // @match https://instagram.com/*
 // @match https://www.instagram.com/*
@@ -49,19 +49,16 @@ main a[href^="/tv/"] {
   display: none !important;
 }
 
-/* @unfeed-rule ig-home-feed scope=home -- the home page shows the stories tray only: the page is invisible except what the tray sweep keeps, so the feed never paints even when the site changes its layout (Denis, 23 Oct 2026) */
-main {
+/* @unfeed-rule ig-home-feed scope=home -- the home page never paints at all (Denis, 25 Oct 2026). It only loads in the hidden stories tray reader, which reads the tray from the page without showing it; anywhere else home is redirected away, and this keeps even that moment blank */
+html,
+html * {
   visibility: hidden !important;
-}
-[data-unfeed-keep],
-[data-unfeed-keep] * {
-  visibility: visible !important;
 }
 html,
 body {
   overflow: hidden !important;
+  background: #0b0b0d !important;
 }
-main > :not(:first-child):not(:has([data-unfeed-keep])),
 article,
 section:has(a[href^="/explore/people/"]),
 div:has(> a[href^="/explore/people/"]) {
@@ -176,7 +173,7 @@ a[href$="/following/"] {
       },
       { id: "ig-2-direct", match: { kind: "prefix", paths: ["/direct/"] }, action: "allow" },
       { id: "ig-3-stories", match: { kind: "prefix", paths: ["/stories/"] }, action: "allow" },
-      { id: "ig-4-home-stories", match: { kind: "home", context: "stories" }, action: "allow" },
+      { id: "ig-4-home-stories-tray", match: { kind: "home", context: "stories-tray" }, action: "allow" },
       { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
       { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
       { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },
@@ -775,48 +772,78 @@ a[href$="/following/"] {
     }
   };
   var KEEP_ATTR = "data-unfeed-keep";
-  var STORY_CONTROL = `[aria-label^="Story by" i], [aria-label$="'s story" i], [aria-label="Your story" i], a[href^="/stories/"]`;
-  function storyControls() {
-    return [...document.querySelectorAll(STORY_CONTROL)].filter((element) => !element.closest("article"));
+  var STORY_CONTROL = `[aria-label^="Story by" i], [aria-label$="'s story" i], [aria-label*="'s story," i], a[href^="/stories/"]`;
+  var USERNAME = /^[A-Za-z0-9._]{1,30}$/;
+  function storyUsername(control) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    const link = control.matches('a[href^="/stories/"]') ? control : control.querySelector('a[href^="/stories/"]');
+    const href = (_a = link == null ? void 0 : link.getAttribute("href")) != null ? _a : "";
+    const fromHref = (_b = /^\/stories\/([^/?#]+)/.exec(href)) == null ? void 0 : _b[1];
+    if (fromHref && fromHref !== "highlights" && USERNAME.test(fromHref)) return fromHref;
+    const label = ((_c = control.getAttribute("aria-label")) != null ? _c : "").trim();
+    const fromLabel = (_f = (_d = /^story by ([^,\s]+)/i.exec(label)) == null ? void 0 : _d[1]) != null ? _f : (_e = /^([^,\s]+)'s story/i.exec(label)) == null ? void 0 : _e[1];
+    if (fromLabel && USERNAME.test(fromLabel)) return fromLabel;
+    const alt = (_h = (_g = control.querySelector("img[alt]")) == null ? void 0 : _g.getAttribute("alt")) != null ? _h : "";
+    const fromAlt = (_i = /^([^,\s]+)'s profile picture/i.exec(alt)) == null ? void 0 : _i[1];
+    return fromAlt && USERNAME.test(fromAlt) ? fromAlt : null;
   }
-  function commonAncestor(elements) {
-    var _a;
-    let candidate = (_a = elements[0]) != null ? _a : null;
-    while (candidate && !elements.every((element) => candidate.contains(element))) {
-      candidate = candidate.parentElement;
+  function storyAvatar(control) {
+    const image = control.querySelector("img");
+    if (!(image instanceof HTMLImageElement)) return null;
+    const source = image.currentSrc || image.getAttribute("src") || "";
+    try {
+      const url = new URL(source, location.origin);
+      return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+    } catch {
+      return null;
     }
-    return candidate;
   }
-  var NOTE_ID = "unfeed-stories-note";
-  var NOTE_AFTER_MS = 8e3;
-  function showStoriesNote() {
-    if (document.getElementById(NOTE_ID) || !document.body) return;
-    const note = document.createElement("div");
-    note.id = NOTE_ID;
-    note.setAttribute(KEEP_ATTR, "");
-    note.textContent = "No stories to show right now.";
-    note.style.cssText = "position:fixed;left:16px;right:16px;top:40%;text-align:center;color:#9a9aa3;font:15px -apple-system,Inter,system-ui,sans-serif;z-index:2147483647;";
-    document.body.appendChild(note);
+  function readStoryItems(root) {
+    const items = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const control of root.querySelectorAll(STORY_CONTROL)) {
+      if (control.closest("article")) continue;
+      const username = storyUsername(control);
+      if (!username || seen.has(username.toLowerCase())) continue;
+      seen.add(username.toLowerCase());
+      items.push({ username, avatar: storyAvatar(control) });
+    }
+    return items;
   }
-  var keepStoriesTray = () => {
-    var _a, _b, _c, _d;
-    if (!pageScopes(location.pathname).includes("home")) return;
-    const scope = globalThis;
-    const state = scope.__UNFEED_IG__ = (_a = scope.__UNFEED_IG__) != null ? _a : {};
-    state.homeSince = (_b = state.homeSince) != null ? _b : Date.now();
-    const controls = storyControls();
-    if (controls.length === 0) {
-      if (Date.now() - state.homeSince > NOTE_AFTER_MS) showStoriesNote();
-      return;
+  var TRAY_GIVE_UP_MS = 1e4;
+  function watchStoriesTray() {
+    const context = globalThis.__UNFEED_CONTEXT__;
+    if (context !== "stories-tray" || typeof document === "undefined") return;
+    const post = createPoster("instagram");
+    const started = Date.now();
+    let last = "";
+    const check = () => {
+      try {
+        silenceVideos();
+        if (!pageScopes(location.pathname).includes("home")) return;
+        const items = readStoryItems(document);
+        const done = items.length > 0 || Date.now() - started > TRAY_GIVE_UP_MS;
+        const key = JSON.stringify([items, done]);
+        if (key === last) return;
+        last = key;
+        post({ type: "ig-stories", items, done });
+      } catch (error) {
+        console.warn("[unfeed] stories tray read failed", error);
+      }
+    };
+    window.setInterval(check, 700);
+    let pending = false;
+    if (typeof MutationObserver !== "undefined") {
+      new MutationObserver(() => {
+        if (pending) return;
+        pending = true;
+        setTimeout(() => {
+          pending = false;
+          check();
+        }, 150);
+      }).observe(document, { childList: true, subtree: true });
     }
-    (_c = document.getElementById(NOTE_ID)) == null ? void 0 : _c.remove();
-    const tray = controls.length > 1 ? commonAncestor(controls) : (_d = controls[0].parentElement) != null ? _d : controls[0];
-    const tooBig = !tray || tray.matches('main, [role="main"], body, html') || tray.querySelector("article") !== null;
-    const keep = tooBig ? controls : [tray];
-    for (const element of keep) {
-      if (element.getAttribute(KEEP_ATTR) === null) element.setAttribute(KEEP_ATTR, "");
-    }
-  };
+  }
   var keepVideosInline = () => {
     for (const video of document.querySelectorAll("video")) {
       if (video.getAttribute("playsinline") !== null) continue;
@@ -824,6 +851,15 @@ a[href$="/following/"] {
       video.setAttribute("webkit-playsinline", "");
       video.playsInline = true;
     }
+  };
+  function silenceVideos() {
+    for (const video of document.querySelectorAll("video")) {
+      video.muted = true;
+      if (!video.paused) video.pause();
+    }
+  }
+  var silenceHiddenPage = () => {
+    if (globalThis.__UNFEED_CONTEXT__ === "stories-tray") silenceVideos();
   };
   var CREATE_LABEL = /^(new post|create|new|post)$/i;
   function findCreateControl() {
@@ -880,8 +916,9 @@ a[href$="/following/"] {
     };
   }
   installCreateHook();
+  watchStoriesTray();
   setupInject("instagram", {
-    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepStoriesTray, keepVideosInline],
+    sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepVideosInline, silenceHiddenPage],
     unread: true,
     enforce: true
   });
