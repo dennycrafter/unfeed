@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Unfeed Instagram
 // @namespace https://github.com/dennycrafter/unfeed
-// @version 1.7.0
+// @version 1.8.0
 // @description Instagram with no feed: opens your DMs, hides the home feed, reels and explore pages, and keeps messages, search, profiles and stories.
 // @match https://instagram.com/*
 // @match https://www.instagram.com/*
@@ -89,6 +89,30 @@ a[href$="/liked-by/"],
 a[href$="/followers/"],
 a[href$="/following/"] {
   visibility: hidden !important;
+}
+
+/* @unfeed-rule ig-theme -- Unfeed's colours and font on the page (Denis, 25 Oct 2026). Only the site's own colour variables are set, so nothing can end up dark on dark if Instagram renames them; it then keeps its own dark mode */
+:root {
+  color-scheme: dark !important;
+  --ig-primary-background: 11, 11, 13 !important;
+  --ig-secondary-background: 18, 18, 21 !important;
+  --ig-elevated-background: 28, 28, 32 !important;
+  --ig-highlight-background: 28, 28, 32 !important;
+  --ig-banner-background: 18, 18, 21 !important;
+  --ig-primary-text: 242, 242, 244 !important;
+  --ig-secondary-text: 154, 154, 163 !important;
+  --ig-tertiary-text: 154, 154, 163 !important;
+  --ig-primary-icon: 242, 242, 244 !important;
+  --ig-secondary-icon: 154, 154, 163 !important;
+  --ig-separator: 42, 42, 48 !important;
+  --ig-elevated-separator: 42, 42, 48 !important;
+  --ig-stroke: 42, 42, 48 !important;
+}
+body,
+button,
+input,
+textarea {
+  font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif !important;
 }
 `;
 

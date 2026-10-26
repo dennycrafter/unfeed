@@ -6,11 +6,11 @@
 // the real settings instead of the defaults.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppSwitcher, type AppKey } from '@/components/AppSwitcher';
 import { BottomBar, type BottomTab } from '@/components/BottomBar';
-import { Header } from '@/components/Header';
+import { BarButton, Header } from '@/components/Header';
 import { IconAvatar, IconChat, IconGear, IconLink, IconPlus, IconQr, IconSearch, IconStories } from '@/components/icons';
 import { LinkSheet } from '@/components/LinkSheet';
 import { StoriesTray, type StoriesStatus, type StoryCircle } from '@/components/StoriesTray';
@@ -59,11 +59,14 @@ function initialUnread(): { instagram: number; linkedin: number } {
 
 /** Post is an action, not a tab: it opens Instagram's own create flow in the
  * current page and never becomes the active item. */
-type InstagramBarKey = InstagramTab | 'post';
+type InstagramBarKey = InstagramTab | 'stories' | 'post';
 
+/** The app's own Instagram tabs (Denis, 25 Oct 2026). Stories opens the
+ * native story circles; Post is an action and never becomes active. */
 const INSTAGRAM_TABS: BottomTab<InstagramBarKey>[] = [
-  { key: 'search', label: 'Search', icon: (color) => <IconSearch color={color} /> },
+  { key: 'stories', label: 'Stories', icon: (color) => <IconStories color={color} /> },
   { key: 'dms', label: 'DMs', icon: (color) => <IconChat color={color} /> },
+  { key: 'search', label: 'Search', icon: (color) => <IconSearch color={color} /> },
   { key: 'post', label: 'Post', icon: (color) => <IconPlus color={color} /> },
   { key: 'profile', label: 'Profile', icon: (color) => <IconAvatar color={color} /> },
 ];
@@ -109,70 +112,6 @@ function initialStoryItems(): StoryCircle[] {
   return ['alice', 'bob.builds', 'cara_k', 'dan', 'eve.photo'].map((username) => ({ username, avatar: null }));
 }
 
-function StoriesButton({ onPress, active }: { onPress: () => void; active: boolean }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Stories"
-      accessibilityState={{ selected: active }}
-      style={styles.headerButton}
-    >
-      <IconStories color={active ? colors.silver : colors.muted} />
-    </TouchableOpacity>
-  );
-}
-
-function QrButton({ onPress, active }: { onPress: () => void; active: boolean }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="QR"
-      accessibilityState={{ selected: active }}
-      style={styles.headerButton}
-    >
-      <IconQr color={active ? colors.silver : colors.muted} />
-    </TouchableOpacity>
-  );
-}
-
-function LinkButton({ onPress, active }: { onPress: () => void; active: boolean }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Open a link"
-      accessibilityState={{ selected: active }}
-      style={styles.headerButton}
-    >
-      <IconLink color={active ? colors.silver : colors.muted} />
-    </TouchableOpacity>
-  );
-}
-
-/** LinkedIn's Post button: opens LinkedIn's own post composer. */
-function LinkedInPostButton({ onPress }: { onPress: () => void }) {
-  return (
-    <TouchableOpacity onPress={onPress} accessibilityRole="button" accessibilityLabel="New LinkedIn post" style={styles.headerButton}>
-      <IconPlus color={colors.muted} />
-    </TouchableOpacity>
-  );
-}
-
-function SettingsButton({ onPress }: { onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Settings"
-      style={styles.headerButton}
-    >
-      <IconGear color={colors.muted} />
-    </TouchableOpacity>
-  );
-}
-
 export default function Index() {
   const { settings, hydrated, logout } = useStoreState();
   const [activeApp, setActiveApp] = useState<AppKey>(() => getStoreState().settings.lastApp);
@@ -197,7 +136,6 @@ export default function Index() {
   // Paste a link and the LinkedIn Post button (Denis, 23 Oct 2026).
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkedInOpen, setLinkedInOpen] = useState<{ url: string; id: number } | null>(null);
-  const [composeSignal, setComposeSignal] = useState(0);
   const hostRef = useRef<InstagramHostHandle | null>(null);
   const postAttemptRef = useRef<PostAttempt>('idle');
 
@@ -272,14 +210,6 @@ export default function Index() {
     setToast('Posting is not available on this page');
   }, [activeTab, scannedUrl, stories]);
 
-  const selectBarItem = useCallback(
-    (key: InstagramBarKey) => {
-      if (key === 'post') startPost();
-      else selectTab(key);
-    },
-    [selectTab, startPost],
-  );
-
   const refreshTray = useCallback(() => {
     setStoriesStatus('loading');
     setTrayLoad((count) => count + 1);
@@ -299,6 +229,15 @@ export default function Index() {
     );
     refreshTray();
   }, [activeTab, refreshTray, stories]);
+
+  const selectBarItem = useCallback(
+    (key: InstagramBarKey) => {
+      if (key === 'post') startPost();
+      else if (key === 'stories') openStories();
+      else selectTab(key);
+    },
+    [openStories, selectTab, startPost],
+  );
 
   const openStory = useCallback(
     (username: string) => {
@@ -338,6 +277,12 @@ export default function Index() {
     if (message.type === 'route' && pathOf(message.url)?.startsWith('/accounts/login')) {
       setStoriesStatus('login');
     }
+  }, []);
+
+  // LinkedIn's unread count for the switcher dot.
+  const handleLinkedInMessage = useCallback((message: PageMessage) => {
+    if (message.type !== 'unread') return;
+    setUnread((prev) => (prev.linkedin === message.count ? prev : { ...prev, linkedin: message.count }));
   }, []);
 
   // A scanned Instagram link switches apps and moves the WebView, all in the
@@ -495,27 +440,15 @@ export default function Index() {
     <View style={styles.fill}>
       <Header
         left={
-          activeApp === 'instagram' ? (
-            <StoriesButton onPress={openStories} active={stories !== null} />
-          ) : (
-            <View style={styles.headerPair}>
-              <QrButton onPress={() => setQrOpen((open) => !open)} active={qrOpen} />
-              <LinkedInPostButton
-                onPress={() => {
-                  tickHaptic(settings.haptics);
-                  setComposeSignal((signal) => signal + 1);
-                }}
-              />
-            </View>
-          )
+          <>
+            {activeApp === 'linkedin' ? (
+              <BarButton label="QR" active={qrOpen} onPress={() => setQrOpen((open) => !open)} icon={(color) => <IconQr color={color} />} />
+            ) : null}
+            <BarButton label="Open a link" active={linkOpen} onPress={() => setLinkOpen((open) => !open)} icon={(color) => <IconLink color={color} />} />
+          </>
         }
         center={<AppSwitcher active={activeApp} unread={unread} onSelect={handleSelectApp} />}
-        right={
-          <View style={styles.headerPair}>
-            <LinkButton onPress={() => setLinkOpen((open) => !open)} active={linkOpen} />
-            <SettingsButton onPress={() => router.push('/settings')} />
-          </View>
-        }
+        right={<BarButton label="Settings" onPress={() => router.push('/settings')} icon={(color) => <IconGear color={color} />} />}
       />
       <View style={[styles.hostArea, activeApp !== 'instagram' && styles.hidden]} testID="host-instagram">
         <View style={styles.hostArea}>
@@ -545,7 +478,7 @@ export default function Index() {
             </View>
           ) : null}
         </View>
-        <BottomBar<InstagramBarKey> tabs={INSTAGRAM_TABS} active={activeTab} onSelect={selectBarItem} />
+        <BottomBar<InstagramBarKey> tabs={INSTAGRAM_TABS} active={stories ? 'stories' : activeTab} onSelect={selectBarItem} />
         <Toast message={toast} />
       </View>
       <View style={[styles.hostArea, activeApp !== 'linkedin' && styles.hidden]} testID="host-linkedin">
@@ -561,8 +494,8 @@ export default function Index() {
             onProfileVanityDetected={handleProfileVanityDetected}
             onOpenInstagramUrl={openInstagramUrl}
             onOpenSettings={() => router.push('/settings')}
-            composeSignal={composeSignal}
             openRequest={linkedInOpen}
+            onMessage={handleLinkedInMessage}
           />
         ) : null}
       </View>
@@ -576,6 +509,4 @@ const styles = StyleSheet.create({
   hostArea: { flex: 1 },
   cover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
   hidden: { display: 'none' },
-  headerButton: { padding: 8 },
-  headerPair: { flexDirection: 'row', alignItems: 'center' },
 });

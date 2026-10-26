@@ -33,7 +33,7 @@ test('scan result sheet at phone size and routing to the profile', async ({ page
 
   // Open in LinkedIn closes the panel and opens the scanned profile behind it.
   await page.getByRole('button', { name: 'Open in LinkedIn' }).click();
-  await expect(page.getByText('LinkedIn (web preview)')).toBeVisible();
+  await expect(page.getByText('LinkedIn messages (web preview)')).toBeVisible();
   await expect(page.getByText(SCAN_PROFILE_URL)).toBeVisible();
 });
 
@@ -41,7 +41,7 @@ test('the QR panel closes from its Close button', async ({ page }) => {
   await openQrScreen(page);
   await expect(page.getByText('Scan a QR code')).toBeVisible();
   await page.getByRole('button', { name: 'Close QR' }).click();
-  await expect(page.getByText('LinkedIn (web preview)')).toBeVisible();
+  await expect(page.getByText('LinkedIn messages (web preview)')).toBeVisible();
 });
 
 test('my code empty state at phone size', async ({ page }) => {

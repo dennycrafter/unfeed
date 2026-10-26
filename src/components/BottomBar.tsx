@@ -1,10 +1,12 @@
-// Native bottom bar (charter section 10): surface2, 1px top line, 24px icons
-// with small labels, active item silver with a 2px white bar above it.
+// The app's own tab bar (Denis, 25 Oct 2026), the same on Instagram and
+// LinkedIn: frosted dark with a thin line on top, 24pt icons over small
+// labels, the active tab silver with a short white line above it. Tabs that
+// are actions (Post) never become the active one.
 
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme/tokens';
+import { bars, colors, space, type } from '../theme/tokens';
 
 export interface BottomTab<K extends string = string> {
   key: K;
@@ -14,7 +16,7 @@ export interface BottomTab<K extends string = string> {
 
 interface BottomBarProps<K extends string = string> {
   tabs: BottomTab<K>[];
-  active: K;
+  active: K | null;
   onSelect?: (key: K) => void;
 }
 
@@ -22,7 +24,7 @@ export function BottomBar<K extends string = string>({ tabs, active, onSelect }:
   const insets = useSafeAreaInsets();
   return (
     <View
-      style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}
+      style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.sm) }]}
       accessibilityRole="tablist"
       accessibilityLabel="Tabs"
     >
@@ -38,9 +40,11 @@ export function BottomBar<K extends string = string>({ tabs, active, onSelect }:
             accessibilityLabel={`${tab.label} tab`}
             onPress={() => onSelect?.(tab.key)}
           >
-            {isActive ? <View style={styles.activeBar} /> : null}
+            <View style={[styles.marker, isActive && styles.markerActive]} />
             {tab.icon(color)}
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            <Text style={[styles.label, { color }, isActive && styles.labelActive]} numberOfLines={1}>
+              {tab.label}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -51,19 +55,13 @@ export function BottomBar<K extends string = string>({ tabs, active, onSelect }:
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: colors.surface2,
-    borderTopWidth: 1,
+    backgroundColor: colors.bar,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
-    paddingTop: 8,
   },
-  tab: { flex: 1, alignItems: 'center', gap: 3 },
-  activeBar: {
-    position: 'absolute',
-    top: -9,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: colors.white,
-  },
-  label: { fontSize: 10 },
+  tab: { flex: 1, alignItems: 'center', gap: 3, minHeight: bars.tab - space.sm, paddingTop: space.sm },
+  marker: { position: 'absolute', top: 0, width: 24, height: 2, borderRadius: 1, backgroundColor: 'transparent' },
+  markerActive: { backgroundColor: colors.white },
+  label: { fontSize: type.tab, letterSpacing: 0.2 },
+  labelActive: { fontWeight: '600' },
 });

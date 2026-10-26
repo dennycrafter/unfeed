@@ -17,6 +17,11 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() },
 }));
 
+// The screen uses the app's shared top bar, which reads the safe area.
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import SettingsScreen from '../../src/app/settings';
