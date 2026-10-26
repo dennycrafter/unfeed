@@ -1,5 +1,5 @@
-// Charter T2 acceptance: screenshots of the Instagram DMs, Search, Profile and
-// Stories screens from the web preview at 390x844 (charter section 10). The
+// Charter T2 acceptance: screenshots of the Instagram DMs, Search,
+// Notifications and Profile screens from the web preview at 390x844 (charter section 10). The
 // placeholder host shows the URL the native WebView would load, so each
 // capture also asserts the guard answer for its tab.
 
@@ -30,18 +30,18 @@ test.describe('instagram screens at phone size', () => {
     await page.screenshot({ path: screenshot('t2-instagram-profile.png') });
   });
 
-  test('Stories button opens the native stories screen, never Instagram home', async ({ page }) => {
+  test('Notifications tab opens the activity page', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('tab', { name: 'Stories tab' }).click();
-    await expect(page.getByTestId('stories-tray')).toBeVisible();
-    await expect(page.getByText('Loading stories...')).toBeVisible();
-    await page.screenshot({ path: screenshot('t2-instagram-stories-loading.png') });
+    await page.getByRole('tab', { name: 'Notifications tab' }).click();
+    await expect(page.getByText('https://www.instagram.com/accounts/activity/')).toBeVisible();
+    await page.screenshot({ path: screenshot('t2-instagram-notifications.png') });
   });
 
-  test('the stories screen shows its own circles', async ({ page }) => {
-    await page.goto('/?demoStories=1');
-    await expect(page.getByRole('button', { name: "Watch alice's story" })).toBeVisible();
-    await page.screenshot({ path: screenshot('t2-instagram-stories.png') });
+  test('there is no Stories tab, and DMs sits in the middle of the bar', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('tab', { name: 'Stories tab' })).toHaveCount(0);
+    const labels = await page.getByRole('tab').evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('aria-label')));
+    expect(labels.slice(2)).toEqual(['Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
   });
 });
 
@@ -63,10 +63,4 @@ test.describe('qa capture', () => {
       await page.screenshot({ path: screenshot(`t2-instagram-${screen.key}-720.png`) });
     });
   }
-
-  test('instagram stories at the qa evidence size', async ({ page }) => {
-    await page.goto('/?demoStories=1');
-    await expect(page.getByRole('button', { name: "Watch alice's story" })).toBeVisible();
-    await page.screenshot({ path: screenshot('t2-instagram-stories-720.png') });
-  });
 });

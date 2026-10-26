@@ -16,6 +16,7 @@ import * as Linking from 'expo-linking';
 import { parsePageMessage } from '../inject/protocol';
 import { buildSettingsPreamble } from '../inject/settingsPreamble';
 import { decide, toAbsoluteUrl, type DecideResult, type Site } from '../rules/decide';
+import { isReturnablePage, returnTarget } from '../rules/returnRules';
 import { recordBounce } from '../state/bounceLog';
 import { colors } from '../theme/tokens';
 import { loadDecision } from './loadDecision';
@@ -29,27 +30,29 @@ function percentWidth(fraction: number): `${number}%` {
   return `${Math.round(clamped * 100)}%` as `${number}%`;
 }
 
-/** Returns the redirect target, or null when the guard allows or the request
- * is already on the target (which would loop). */
-function redirectTarget(site: Site, result: DecideResult, requestedUrl: string): string | null {
-  if (result.action !== 'redirect') return null;
-  const target = toAbsoluteUrl(site, result.to ?? '/');
-  return requestedUrl === target ? null : target;
-}
-
 /** Keeps the bounce for the Blocked pages list in Settings. */
-function logBounce(site: Site, url: string, result: DecideResult): void {
-  recordBounce({ at: Date.now(), site, url, rule: result.rule ?? 'unknown', to: result.to });
+function logBounce(site: Site, url: string, result: DecideResult, target: string): void {
+  const ruleTarget = toAbsoluteUrl(site, result.to ?? '/');
+  // A return to the last page is logged with that page, so the list shows
+  // where the page really went.
+  recordBounce({ at: Date.now(), site, url, rule: result.rule ?? 'unknown', to: target === ruleTarget ? result.to : target });
 }
 
 export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function WebViewHost(
-  { site, url, context, settings, hideCounts = false, injectScript, onMessage, scrollToTopSignal = 0, style, placeholderLabel },
+  { site, url, context, homeUrl = null, settings, hideCounts = false, injectScript, onMessage, scrollToTopSignal = 0, style, placeholderLabel },
   ref,
 ) {
   const webViewRef = useRef<WebView<object> | null>(null);
   const [source, setSource] = useState(url);
+  const sourceRef = useRef(url);
+  sourceRef.current = source;
   const [progress, setProgress] = useState(0);
   const canGoBackRef = useRef(false);
+  // The last allowed page and the latest page address, for returns and for
+  // the delayed native backup redirect below.
+  const lastGoodRef = useRef<string | null>(null);
+  const lastRouteRef = useRef<string | null>(null);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs keep the latest tab context and settings visible inside callbacks
   // without resubscribing the WebView handler props on every render.
@@ -59,10 +62,21 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   settingsRef.current = settings;
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const homeUrlRef = useRef(homeUrl);
+  homeUrlRef.current = homeUrl;
 
+  // Only a new address from the shell moves the page. The shell never feeds
+  // back the page's own address, so the page never reloads under Denis.
   useEffect(() => {
     setSource(url);
   }, [url]);
+
+  useEffect(
+    () => () => {
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    },
+    [],
+  );
 
   useImperativeHandle(
     ref,
@@ -85,6 +99,13 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
       setContext(next: string) {
         contextRef.current = next;
       },
+      open(target: string) {
+        if (sourceRef.current === target) {
+          webViewRef.current?.injectJavaScript(`window.location.assign(${JSON.stringify(target)}); true;`);
+        } else {
+          setSource(target);
+        }
+      },
     }),
     [],
   );
@@ -92,6 +113,51 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   const runGuard = useCallback(
     (rawUrl: string): DecideResult => decide(site, rawUrl, contextRef.current, settingsRef.current),
     [site],
+  );
+
+  /** Where a redirect lands: home and feed rules go back to the last page of
+   * this tab (src/rules/returnRules.ts), the rest to the rule's target. */
+  const targetFor = useCallback(
+    (result: DecideResult, blockedUrl: string): string | null => {
+      if (result.action !== 'redirect') return null;
+      const ruleTarget = toAbsoluteUrl(site, result.to ?? '/');
+      const target = returnTarget(result.rule, ruleTarget, lastGoodRef.current, homeUrlRef.current, blockedUrl);
+      return target === blockedUrl ? null : target;
+    },
+    [site],
+  );
+
+  /** Moves the page to a redirect target without a second load: a new
+   * address goes through the source, the same address through the page. */
+  const goTo = useCallback((target: string): void => {
+    if (sourceRef.current === target) {
+      webViewRef.current?.injectJavaScript(`window.location.replace(${JSON.stringify(target)}); true;`);
+    } else {
+      setSource(target);
+    }
+  }, []);
+
+  const cancelFallback = useCallback((): void => {
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = null;
+  }, []);
+
+  /** The injected script enforces in-page moves itself. Native only steps in
+   * if the page is still on the blocked address a moment later, so a
+   * redirect never runs twice and reloads the page. */
+  const scheduleFallback = useCallback(
+    (blockedUrl: string, result: DecideResult): void => {
+      cancelFallback();
+      fallbackTimerRef.current = setTimeout(() => {
+        fallbackTimerRef.current = null;
+        if (lastRouteRef.current !== blockedUrl) return;
+        const target = targetFor(result, blockedUrl);
+        if (!target) return;
+        logBounce(site, blockedUrl, result, target);
+        webViewRef.current?.injectJavaScript(`window.location.replace(${JSON.stringify(target)}); true;`);
+      }, 900);
+    },
+    [cancelFallback, site, targetFor],
   );
 
   const openOutside = useCallback((rawUrl: string) => {
@@ -102,7 +168,11 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
 
   const handleShouldStartLoad = useCallback(
     (request: ShouldStartLoadRequest): boolean => {
-      if (request.isTopFrame !== false) canGoBackRef.current = request.canGoBack;
+      if (request.isTopFrame !== false) {
+        canGoBackRef.current = request.canGoBack;
+        // A real load is under way: the backup redirect is not needed.
+        cancelFallback();
+      }
       const result = runGuard(request.url);
       const decision = loadDecision(result, {
         isTopFrame: request.isTopFrame,
@@ -114,27 +184,25 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         openOutside(request.url);
         return false;
       }
-      const target = redirectTarget(site, result, request.url);
+      const target = targetFor(result, request.url);
       if (target) {
-        logBounce(site, request.url, result);
-        setSource(target);
+        logBounce(site, request.url, result, target);
+        goTo(target);
       }
       return false;
     },
-    [openOutside, runGuard, site],
+    [cancelFallback, goTo, openOutside, runGuard, site, targetFor],
   );
 
   const handleNavigationStateChange = useCallback(
     (state: WebViewNavigation): void => {
       canGoBackRef.current = state.canGoBack;
+      if (state.loading) return;
+      lastRouteRef.current = state.url;
       const result = runGuard(state.url);
-      const target = redirectTarget(site, result, state.url);
-      if (target) {
-        logBounce(site, state.url, result);
-        setSource(target);
-      }
+      if (result.action === 'redirect') scheduleFallback(state.url, result);
     },
-    [runGuard, site],
+    [runGuard, scheduleFallback],
   );
 
   const handleMessage = useCallback(
@@ -142,13 +210,13 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
       const message = parsePageMessage(String(event.nativeEvent.data));
       if (!message) return;
       if (message.type === 'route') {
+        lastRouteRef.current = message.url;
         const result = runGuard(message.url);
-        if (result.action === 'redirect') {
-          const target = toAbsoluteUrl(site, result.to ?? '/');
-          logBounce(site, message.url, result);
-          // Single page navigation never fires shouldStartLoad, so the
-          // in page replace is how a redirect is enforced here (gotcha 2).
-          webViewRef.current?.injectJavaScript(`window.location.replace(${JSON.stringify(target)}); true;`);
+        if (result.action === 'allow') {
+          cancelFallback();
+          if (isReturnablePage(message.url)) lastGoodRef.current = message.url;
+        } else if (result.action === 'redirect') {
+          scheduleFallback(message.url, result);
         } else if (result.action === 'external') {
           openOutside(message.url);
         }
@@ -157,8 +225,14 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
       }
       onMessageRef.current?.(message);
     },
-    [openOutside, runGuard, site],
+    [cancelFallback, openOutside, runGuard, scheduleFallback, site],
   );
+
+  // iOS can drop a page that sat in the background to save memory, which
+  // leaves it blank. Load it again where it was.
+  const handleContentProcessDidTerminate = useCallback(() => {
+    webViewRef.current?.reload();
+  }, []);
 
   const handleLoadProgress = useCallback((event: WebViewProgressEvent) => {
     setProgress(event.nativeEvent.progress);
@@ -169,8 +243,8 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   // The page reads the settings and the tab context that caused this load
   // before the main script runs (charter sections 8.4 and 8.5).
   const script = useMemo(
-    () => buildSettingsPreamble({ allowSharedPosts: settings.allowSharedPosts, hideCounts }, context) + injectScript,
-    [context, hideCounts, injectScript, settings.allowSharedPosts],
+    () => buildSettingsPreamble({ allowSharedPosts: settings.allowSharedPosts, hideCounts }, context, homeUrl) + injectScript,
+    [context, hideCounts, homeUrl, injectScript, settings.allowSharedPosts],
   );
 
   // A second press on the active tab scrolls the page to the top (section
@@ -195,7 +269,9 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         allowsBackForwardNavigationGestures
-        pullToRefreshEnabled
+        // Off on purpose (Denis, 26 Oct 2026): scrolling up through a DM
+        // thread kept pulling the page into a reload.
+        pullToRefreshEnabled={false}
         setSupportMultipleWindows={false}
         injectedJavaScriptBeforeContentLoaded={script}
         onShouldStartLoadWithRequest={handleShouldStartLoad}
@@ -203,6 +279,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         onMessage={handleMessage}
         onLoadProgress={handleLoadProgress}
         onLoadEnd={handleLoadEnd}
+        onContentProcessDidTerminate={handleContentProcessDidTerminate}
       />
       {progress > 0 && progress < 1 ? (
         <View style={styles.progressTrack} pointerEvents="none">

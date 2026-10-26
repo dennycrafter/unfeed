@@ -1,11 +1,13 @@
-// LinkedIn host: one persistent WebView steered by the app's own tab bar
-// (Denis, 25 Oct 2026): Profile, Messages, Search, Post, Notifications.
-// LinkedIn's own bars are hidden by the inject script. Each tab remembers the
-// page it was on, so going back to a tab lands where it was left. Post is an
-// action that opens LinkedIn's composer; Search has a native search box with
-// recent searches over the results page. QR and Link live in the top bar.
+// LinkedIn host, steered by the app's own tab bar (Denis, 25 Oct 2026):
+// Profile, Messages, Search, Post, Notifications. LinkedIn's own bars are
+// hidden by the inject script. Each tab has its own web view (Denis, 26 Oct
+// 2026), made the first time the tab opens and then kept, so a tab comes back
+// where it was left, scroll included, and never reloads by itself. Post opens
+// LinkedIn's composer in a web view of its own over the tab; Search has a
+// native search box with recent searches over the results page. QR lives in
+// the top bar.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BottomBar, type BottomTab } from '../components/BottomBar';
 import { EmptyState } from '../components/EmptyState';
@@ -44,16 +46,23 @@ const TABS: BottomTab<LinkedInBarKey>[] = [
   { key: 'notifications', label: 'Notifications', icon: (color) => <IconBell color={color} /> },
 ];
 
-/** The Search tab has no page until the first search. */
-type TabUrls = Record<LinkedInTab, string | null>;
+const TAB_ORDER: LinkedInTab[] = ['profile', 'messages', 'search', 'notifications'];
 
-function initialTabUrls(profileUrl: string | null | undefined): TabUrls {
-  return {
-    profile: profileUrl || LINKEDIN_PROFILE_ME_URL,
-    messages: LINKEDIN_MESSENGER_URL,
-    search: null,
-    notifications: LINKEDIN_NOTIFICATIONS_URL,
-  };
+/** Opened tabs and the address each started on. The Search tab has no page
+ * until the first search. */
+type OpenedTabs = Partial<Record<LinkedInTab, string>>;
+
+function startUrl(tab: LinkedInTab, profileUrl: string | null | undefined): string | null {
+  switch (tab) {
+    case 'profile':
+      return profileUrl || LINKEDIN_PROFILE_ME_URL;
+    case 'notifications':
+      return LINKEDIN_NOTIFICATIONS_URL;
+    case 'search':
+      return null;
+    default:
+      return LINKEDIN_MESSENGER_URL;
+  }
 }
 
 export interface LinkedInHostProps {
@@ -95,33 +104,18 @@ export function LinkedInHost({
   onMessage,
   style,
 }: LinkedInHostProps) {
-  const hostRef = useRef<WebViewHostApi | null>(null);
+  const hostRefs = useRef<Partial<Record<LinkedInTab, WebViewHostApi | null>>>({});
   const [activeTab, setActiveTab] = useState<LinkedInTab>(DEFAULT_TAB);
-  const [tabUrls, setTabUrls] = useState<TabUrls>(() => initialTabUrls(profileUrl));
-  // A page shown on top of the tab (composer, pasted or scanned link, log
-  // out). The tab's own page comes back when a tab is pressed.
-  const [pageUrl, setPageUrl] = useState<string | null>(null);
+  const [opened, setOpened] = useState<OpenedTabs>(() => ({ [DEFAULT_TAB]: LINKEDIN_MESSENGER_URL }));
   const [recents, setRecents] = useState<string[]>([]);
-  // Post composer session (Denis, 23 Oct 2026): the route guard lets the
-  // bare /feed/ through only while LinkedIn's composer is open.
+  // Post composer (Denis, 23 Oct 2026): its own web view over the tab, gone
+  // again once LinkedIn closes the composer.
   const [composerOpen, setComposerOpen] = useState(false);
-  const setComposer = useCallback((open: boolean): void => {
-    hostRef.current?.setContext(open ? 'composer' : 'page');
-    setComposerOpen(open);
-  }, []);
 
-  const shownUrl = pageUrl ?? tabUrls[activeTab];
-  const searchIdle = activeTab === 'search' && pageUrl === null && tabUrls.search === null;
-  // The WebView needs some address even while the Search tab has none yet;
-  // it stays on the last page, covered by the search screen.
-  const [lastShown, setLastShown] = useState(LINKEDIN_MESSENGER_URL);
-  if (shownUrl && shownUrl !== lastShown) setLastShown(shownUrl);
-  const webViewUrl = shownUrl ?? lastShown;
-
-  const stateRef = useRef({ activeTab, pageUrl, composerOpen, qrOpen, webViewUrl });
+  const stateRef = useRef({ activeTab, qrOpen });
   useEffect(() => {
-    stateRef.current = { activeTab, pageUrl, composerOpen, qrOpen, webViewUrl };
-  }, [activeTab, composerOpen, pageUrl, qrOpen, webViewUrl]);
+    stateRef.current = { activeTab, qrOpen };
+  }, [activeTab, qrOpen]);
 
   useEffect(() => {
     let alive = true;
@@ -133,37 +127,56 @@ export function LinkedInHost({
     };
   }, []);
 
-  // A new saved profile link moves the Profile tab (detected or typed in
-  // Settings). Adjusted during render, React's pattern for state that
-  // follows a prop.
-  const [lastProfileUrl, setLastProfileUrl] = useState(profileUrl);
-  if (profileUrl !== lastProfileUrl) {
-    setLastProfileUrl(profileUrl);
-    if (profileUrl) setTabUrls((current) => ({ ...current, profile: profileUrl }));
-  }
+  const openedRef = useRef(opened);
+  useLayoutEffect(() => {
+    openedRef.current = opened;
+  }, [opened]);
 
-  /** Shows a page over the current tab. The same address twice would not
-   * reload through the source prop, so a repeat goes through the page. */
-  const showPage = useCallback((target: string): void => {
-    if (target === stateRef.current.webViewUrl) {
-      hostRef.current?.runScript(`window.location.assign(${JSON.stringify(target)})`);
-    }
-    setPageUrl(target);
-  }, []);
+  /** Opens a tab, making its web view the first time. With an address, the
+   * tab's page moves there. */
+  const showTab = useCallback(
+    (tab: LinkedInTab, url?: string): void => {
+      const existing = openedRef.current[tab];
+      if (existing && url) hostRefs.current[tab]?.open(url);
+      if (!existing) {
+        const start = url ?? startUrl(tab, profileUrl);
+        if (start) setOpened((current) => ({ ...current, [tab]: start }));
+      }
+      setActiveTab(tab);
+    },
+    [profileUrl],
+  );
 
-  // Log out (settings screen request): land on the site's own logout page,
-  // then bring the inbox back so the login shows. The signal id is
-  // remembered so one request only ever runs once.
+  /** Opens an address in the tab that is showing (a pasted or scanned link).
+   * The Search tab before its first search has no page: Messages takes it. */
+  const openInTab = useCallback(
+    (target: string): void => {
+      setComposerOpen(false);
+      const tab = stateRef.current.activeTab;
+      const host = hostRefs.current[tab];
+      if (host) {
+        host.open(target);
+        return;
+      }
+      showTab('messages', target);
+    },
+    [showTab],
+  );
+
+  // Log out (settings screen request): Messages lands on the site's own
+  // logout page and the other tabs close, then the inbox comes back so the
+  // login shows. The signal id is remembered so one request runs once.
   const lastLogoutRef = useRef(0);
   useEffect(() => {
     if (logoutSignal === 0 || logoutSignal === lastLogoutRef.current) return;
     lastLogoutRef.current = logoutSignal;
     onQrOpenChange?.(false);
-    hostRef.current?.clearCache();
+    setComposerOpen(false);
     setActiveTab(DEFAULT_TAB);
-    setTabUrls(initialTabUrls(null));
-    setPageUrl(LINKEDIN_LOGOUT_URL);
-    const timer = setTimeout(() => setPageUrl(null), 2500);
+    setOpened({ [DEFAULT_TAB]: LINKEDIN_MESSENGER_URL });
+    hostRefs.current.messages?.clearCache();
+    hostRefs.current.messages?.open(LINKEDIN_LOGOUT_URL);
+    const timer = setTimeout(() => hostRefs.current.messages?.open(LINKEDIN_MESSENGER_URL), 2500);
     return () => clearTimeout(timer);
   }, [logoutSignal, onQrOpenChange]);
 
@@ -186,13 +199,6 @@ export function LinkedInHost({
 
   const handleMessage = useCallback(
     (message: PageMessage): void => {
-      if (message.type === 'li-composer') {
-        setComposer(message.open);
-        // The composer closed: back to the tab's own page.
-        if (!message.open) setPageUrl(null);
-      } else if (message.type === 'route' && message.url.includes('shareActive')) {
-        setComposer(true);
-      }
       if (message.type === 'li-own-profile') {
         // Only the own profile carries edit links, so this is always Denis.
         saveOwnProfile(message.url);
@@ -202,24 +208,26 @@ export function LinkedInHost({
         if (vanity && (expectOwnVanityRef.current || isSelf)) {
           saveOwnProfile(`https://www.linkedin.com/in/${vanity}/`);
         }
-        // Each tab keeps its place: remember where the tab's page went.
-        const current = stateRef.current;
-        if (current.pageUrl === null && !current.composerOpen && !message.url.includes('shareActive')) {
-          const tab = current.activeTab;
-          setTabUrls((urls) => (urls[tab] === message.url || (tab === 'search' && urls.search === null) ? urls : { ...urls, [tab]: message.url }));
-        }
       }
       onMessage?.(message);
     },
-    [onMessage, saveOwnProfile, setComposer],
+    [onMessage, saveOwnProfile],
+  );
+
+  const handleComposerMessage = useCallback(
+    (message: PageMessage): void => {
+      // The composer closed or moved on: back to the tab underneath.
+      if (message.type === 'li-composer' && !message.open) setComposerOpen(false);
+      handleMessage(message);
+    },
+    [handleMessage],
   );
 
   const startPost = useCallback((): void => {
     tickHaptic(haptics);
     onQrOpenChange?.(false);
-    setComposer(true);
-    showPage(LINKEDIN_COMPOSER_URL);
-  }, [haptics, onQrOpenChange, setComposer, showPage]);
+    setComposerOpen(true);
+  }, [haptics, onQrOpenChange]);
 
   const selectTab = useCallback(
     (key: LinkedInBarKey): void => {
@@ -228,74 +236,78 @@ export function LinkedInHost({
         return;
       }
       onQrOpenChange?.(false);
-      const current = stateRef.current;
-      if (key === current.activeTab && current.pageUrl === null) {
+      setComposerOpen(false);
+      if (key === stateRef.current.activeTab) {
         // The active tab pressed again scrolls its page to the top.
-        hostRef.current?.scrollTop();
+        hostRefs.current[key]?.scrollTop();
         return;
       }
-      if (current.composerOpen) setComposer(false);
       tickHaptic(haptics);
       if (key === 'profile' && !profileUrl) expectOwnVanityRef.current = true;
-      setPageUrl(null);
-      setActiveTab(key);
+      showTab(key);
     },
-    [haptics, onQrOpenChange, profileUrl, setComposer, startPost],
+    [haptics, onQrOpenChange, profileUrl, showTab, startPost],
   );
 
-  const handleSearchSubmit = useCallback((keywords: string): void => {
-    const url = buildPeopleSearchUrl(keywords);
-    setPageUrl(null);
-    setActiveTab('search');
-    setTabUrls((current) => ({ ...current, search: url }));
-    setRecents((current) => {
-      const next = nextRecentSearches(current, keywords);
-      void saveRecentSearches(next);
-      return next;
-    });
-  }, []);
+  const handleSearchSubmit = useCallback(
+    (keywords: string): void => {
+      showTab('search', buildPeopleSearchUrl(keywords));
+      setRecents((current) => {
+        const next = nextRecentSearches(current, keywords);
+        void saveRecentSearches(next);
+        return next;
+      });
+    },
+    [showTab],
+  );
 
-  // A pasted LinkedIn link (the header Link button).
+  // A pasted LinkedIn link (from the Link pop-up on Instagram).
   const lastOpenRef = useRef(0);
   useEffect(() => {
     if (!openRequest || openRequest.id === lastOpenRef.current) return;
     lastOpenRef.current = openRequest.id;
     onQrOpenChange?.(false);
-    showPage(openRequest.url);
-  }, [onQrOpenChange, openRequest, showPage]);
+    openInTab(openRequest.url);
+  }, [onQrOpenChange, openInTab, openRequest]);
 
-  // Scanned LinkedIn codes (charter 8.7) open over the current tab.
+  // Scanned LinkedIn codes (charter 8.7) open in the tab that is showing.
   const openScannedLinkedInUrl = useCallback(
     (scanned: string): void => {
       onQrOpenChange?.(false);
-      showPage(scanned);
+      openInTab(scanned);
     },
-    [onQrOpenChange, showPage],
+    [onQrOpenChange, openInTab],
   );
 
   const findMyProfile = useCallback((): void => {
     expectOwnVanityRef.current = true;
     returnToQrRef.current = true;
     onQrOpenChange?.(false);
-    setPageUrl(null);
-    setActiveTab('profile');
-    setTabUrls((current) => ({ ...current, profile: LINKEDIN_PROFILE_ME_URL }));
-  }, [onQrOpenChange]);
+    showTab('profile', LINKEDIN_PROFILE_ME_URL);
+  }, [onQrOpenChange, showTab]);
 
-  // Android back: close the QR panel, then back in the page, then the
-  // Messages tab, then leave.
+  // Android back: close the QR panel, then the composer, then back in the
+  // tab's page, then the Messages tab, then leave.
+  const composerRef = useRef(composerOpen);
+  useLayoutEffect(() => {
+    composerRef.current = composerOpen;
+  }, [composerOpen]);
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (stateRef.current.qrOpen) {
         onQrOpenChange?.(false);
         return true;
       }
-      if (hostRef.current?.canGoBack()) {
-        hostRef.current.goBack();
+      if (composerRef.current) {
+        setComposerOpen(false);
+        return true;
+      }
+      const host = hostRefs.current[stateRef.current.activeTab];
+      if (host?.canGoBack()) {
+        host.goBack();
         return true;
       }
       if (stateRef.current.activeTab !== DEFAULT_TAB) {
-        setPageUrl(null);
         setActiveTab(DEFAULT_TAB);
         return true;
       }
@@ -304,26 +316,60 @@ export function LinkedInHost({
     return () => subscription.remove();
   }, [onQrOpenChange]);
 
+  // Stable ref setters, one per tab.
+  const refFor = useMemo(() => {
+    const setters = {} as Record<LinkedInTab, (handle: WebViewHostApi | null) => void>;
+    for (const tab of TAB_ORDER) {
+      setters[tab] = (handle) => {
+        hostRefs.current[tab] = handle;
+      };
+    }
+    return setters;
+  }, []);
+
+  const searchIdle = activeTab === 'search' && !opened.search;
+
   return (
     <View style={[styles.fill, style]}>
-      {activeTab === 'search' && pageUrl === null ? (
-        <SearchBar recents={recents} onSubmit={handleSearchSubmit} />
-      ) : null}
+      {activeTab === 'search' && !composerOpen ? <SearchBar recents={recents} onSubmit={handleSearchSubmit} /> : null}
       <View style={styles.fill}>
-        <WebViewHost
-          ref={hostRef}
-          site="linkedin"
-          url={webViewUrl}
-          context={composerOpen ? 'composer' : 'page'}
-          settings={settings}
-          hideCounts={hideCounts}
-          injectScript={LINKEDIN_INJECT_SCRIPT}
-          onMessage={handleMessage}
-          placeholderLabel={`LinkedIn ${activeTab} (web preview)`}
-        />
+        {TAB_ORDER.map((tab) => {
+          const url = opened[tab];
+          if (!url) return null;
+          return (
+            <View key={tab} style={[styles.cover, tab !== activeTab && styles.hidden]} testID={`li-tab-${tab}`}>
+              <WebViewHost
+                ref={refFor[tab]}
+                site="linkedin"
+                url={url}
+                context="page"
+                homeUrl={startUrl(tab, profileUrl) ?? LINKEDIN_MESSENGER_URL}
+                settings={settings}
+                hideCounts={hideCounts}
+                injectScript={LINKEDIN_INJECT_SCRIPT}
+                onMessage={handleMessage}
+                placeholderLabel={`LinkedIn ${tab} (web preview)`}
+              />
+            </View>
+          );
+        })}
         {searchIdle ? (
           <View style={styles.cover}>
             <EmptyState message="Search for people by name. Posts never show here." />
+          </View>
+        ) : null}
+        {composerOpen ? (
+          <View style={styles.cover} testID="li-composer">
+            <WebViewHost
+              site="linkedin"
+              url={LINKEDIN_COMPOSER_URL}
+              context="composer"
+              settings={settings}
+              hideCounts={hideCounts}
+              injectScript={LINKEDIN_INJECT_SCRIPT}
+              onMessage={handleComposerMessage}
+              placeholderLabel="LinkedIn post (web preview)"
+            />
           </View>
         ) : null}
         {qrOpen ? (
@@ -355,4 +401,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: colors.bg,
   },
+  hidden: { display: 'none' },
 });

@@ -14,7 +14,6 @@
     },
     { "id": "ig-2-direct", "match": { "kind": "prefix", "paths": ["/direct/"] }, "action": "allow" },
     { "id": "ig-3-stories", "match": { "kind": "prefix", "paths": ["/stories/"] }, "action": "allow" },
-    { "id": "ig-4-home-stories-tray", "match": { "kind": "home", "context": "stories-tray" }, "action": "allow" },
     { "id": "ig-5-home", "match": { "kind": "home" }, "action": "redirect", "to": "/direct/inbox/" },
     { "id": "ig-6-explore-search", "match": { "kind": "prefix", "paths": ["/explore/search/"] }, "action": "allow" },
     { "id": "ig-7-explore", "match": { "kind": "prefix", "paths": ["/explore/"] }, "action": "redirect", "to": "/explore/search/" },

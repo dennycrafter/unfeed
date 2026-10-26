@@ -53,31 +53,6 @@ const applyNamedRules: HideSweep = (settings, post) => {
   post({ type: 'hide-stats', matched });
 };
 
-/** Instagram's own nav carries a link to the signed in profile with the
- * avatar inside it (charter section 8.5). Read it once and post the
- * username; Settings only needs it when detection fails. */
-const detectUsername: HideSweep = (_settings, post) => {
-  const scope = globalThis as { __UNFEED_IG__?: { postedUsername?: string } };
-  const state = (scope.__UNFEED_IG__ = scope.__UNFEED_IG__ ?? {});
-  if (state.postedUsername) return;
-  for (const anchor of document.querySelectorAll('a[href]')) {
-    if (!(anchor instanceof HTMLAnchorElement)) continue;
-    let path = '';
-    try {
-      path = new URL(anchor.getAttribute('href') ?? '', location.origin).pathname;
-    } catch {
-      continue;
-    }
-    if (!/^\/[A-Za-z0-9._]+\/?$/.test(path)) continue;
-    if (path.startsWith('/explore') || path.startsWith('/reels')) continue;
-    if (!anchor.querySelector('img')) continue;
-    const value = path.replace(/\//g, '');
-    state.postedUsername = value;
-    post({ type: 'ig-username', value });
-    return;
-  }
-};
-
 const HIDDEN_ATTR = 'data-unfeed-hidden';
 
 function hide(element: Element): void {
@@ -159,6 +134,91 @@ const hideOwnNav: HideSweep = () => {
   }
 };
 
+const USERNAME = /^[A-Za-z0-9._]{1,30}$/;
+
+/** Paths that are never a username, even though they are one segment. */
+const NOT_A_USERNAME = new Set(['explore', 'reels', 'direct', 'accounts', 'stories', 'p', 'reel', 'tv', 'create', 'notifications']);
+
+function usernameFromHref(href: string): string | null {
+  let path = '';
+  try {
+    path = new URL(href, location.origin).pathname;
+  } catch {
+    return null;
+  }
+  const match = /^\/([A-Za-z0-9._]+)\/?$/.exec(path);
+  const value = match?.[1];
+  if (!value || !USERNAME.test(value) || NOT_A_USERNAME.has(value.toLowerCase())) return null;
+  return value;
+}
+
+/** The signed in username (Denis, 26 Oct 2026). It used to be the first
+ * avatar link on any page, so a story or a DM put a friend's name in
+ * Settings. Now it only comes from places that are always Denis himself:
+ * the profile item in Instagram's own nav bar (a link with an avatar that
+ * sits with two or more nav icons, outside the page, posts and dialogs), or
+ * his own profile page, the only profile with an Edit profile link. */
+function ownUsername(): string | null {
+  for (const anchor of document.querySelectorAll('a[href]')) {
+    if (!anchor.querySelector('img')) continue;
+    if (anchor.closest('main, [role="main"], article, [role="dialog"]')) continue;
+    const value = usernameFromHref(anchor.getAttribute('href') ?? '');
+    if (!value) continue;
+    // The bar around it: never a container that also holds the page.
+    let node = anchor.parentElement;
+    for (let hop = 0; node !== null && hop < 6; hop += 1) {
+      if (holdsPageContent(node)) break;
+      if (navLinkCount(node) >= 2) return value;
+      node = node.parentElement;
+    }
+  }
+  if (document.querySelector('a[href="/accounts/edit/"], a[href^="/accounts/edit/?"]')) {
+    return usernameFromHref(location.href);
+  }
+  return null;
+}
+
+const detectUsername: HideSweep = (_settings, post) => {
+  const scope = globalThis as { __UNFEED_IG__?: { postedUsername?: string } };
+  const state = (scope.__UNFEED_IG__ = scope.__UNFEED_IG__ ?? {});
+  const value = ownUsername();
+  if (!value || state.postedUsername === value) return;
+  state.postedUsername = value;
+  post({ type: 'ig-username', value });
+};
+
+/** A post page shows the post (Denis, 26 Oct 2026). The old rule hid every
+ * part of the page after the first, which on some posts was the post itself
+ * and left a blank page. Now only the "More posts from" and suggestion
+ * sections go: from their heading up to the largest part that holds none of
+ * the post's own controls (Like, comment box). If that is unclear, nothing is
+ * hidden. */
+const RELATED_HEADING = /^(more posts from\b|more from\b|suggested for you$|suggested posts$|related posts$|you might like$)/i;
+const POST_CONTROLS = 'svg[aria-label="Like"], svg[aria-label="Unlike"], textarea, [aria-label="Comment"], form';
+
+function hideRelatedFrom(heading: Element): void {
+  let target: Element | null = null;
+  let node: Element | null = heading;
+  for (let hop = 0; node !== null && hop < 10; hop += 1) {
+    const parent: Element | null = node.parentElement;
+    if (parent === null || parent === document.body || parent.matches('main, [role="main"]')) break;
+    if (parent.querySelector(POST_CONTROLS)) break;
+    node = parent;
+    target = node;
+  }
+  if (target && !target.querySelector(POST_CONTROLS)) hide(target);
+}
+
+const hideRelatedPosts: HideSweep = () => {
+  if (!pageScopes(location.pathname).includes('post-page')) return;
+  for (const heading of document.querySelectorAll('h1, h2, h3, h4, span, div')) {
+    if (heading.children.length > 1 || heading.closest(`[${HIDDEN_ATTR}]`)) continue;
+    const text = (heading.textContent ?? '').trim();
+    if (text.length > 60 || !RELATED_HEADING.test(text)) continue;
+    hideRelatedFrom(heading);
+  }
+};
+
 const OPEN_APP_PATTERN = /^(get the app|open app|open the app|use the app|open instagram|get instagram|download the app|switch to the app)$/i;
 
 /** The smallest ancestor that holds only the banner, so the page survives. */
@@ -185,102 +245,6 @@ const hideAppBanners: HideSweep = () => {
 
 const KEEP_ATTR = 'data-unfeed-keep';
 
-/** Story controls on the home page: buttons labelled "Story by name", the
- * own "Your story" item and links into /stories/. Never inside a feed post. */
-const STORY_CONTROL = '[aria-label^="Story by" i], [aria-label$="\'s story" i], [aria-label*="\'s story," i], a[href^="/stories/"]';
-
-const USERNAME = /^[A-Za-z0-9._]{1,30}$/;
-
-/** The username a story control belongs to: its /stories/<name>/ link, its
- * "Story by name" or "name's story" label, or its avatar's alt text. */
-function storyUsername(control: Element): string | null {
-  const link = control.matches('a[href^="/stories/"]') ? control : control.querySelector('a[href^="/stories/"]');
-  const href = link?.getAttribute('href') ?? '';
-  const fromHref = /^\/stories\/([^/?#]+)/.exec(href)?.[1];
-  if (fromHref && fromHref !== 'highlights' && USERNAME.test(fromHref)) return fromHref;
-  const label = (control.getAttribute('aria-label') ?? '').trim();
-  const fromLabel = /^story by ([^,\s]+)/i.exec(label)?.[1] ?? /^([^,\s]+)'s story/i.exec(label)?.[1];
-  if (fromLabel && USERNAME.test(fromLabel)) return fromLabel;
-  const alt = control.querySelector('img[alt]')?.getAttribute('alt') ?? '';
-  const fromAlt = /^([^,\s]+)'s profile picture/i.exec(alt)?.[1];
-  return fromAlt && USERNAME.test(fromAlt) ? fromAlt : null;
-}
-
-function storyAvatar(control: Element): string | null {
-  const image = control.querySelector('img');
-  if (!(image instanceof HTMLImageElement)) return null;
-  const source = image.currentSrc || image.getAttribute('src') || '';
-  try {
-    const url = new URL(source, location.origin);
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
-interface StoryItem {
-  username: string;
-  avatar: string | null;
-}
-
-/** Every story in the tray, in tray order, once per person. The own "Your
- * story" item has no username in its label and is skipped unless it links
- * to a story of its own. */
-function readStoryItems(root: ParentNode): StoryItem[] {
-  const items: StoryItem[] = [];
-  const seen = new Set<string>();
-  for (const control of root.querySelectorAll(STORY_CONTROL)) {
-    if (control.closest('article')) continue;
-    const username = storyUsername(control);
-    if (!username || seen.has(username.toLowerCase())) continue;
-    seen.add(username.toLowerCase());
-    items.push({ username, avatar: storyAvatar(control) });
-  }
-  return items;
-}
-
-const TRAY_GIVE_UP_MS = 10000;
-
-/** The stories tray (Denis, 25 Oct 2026): Instagram home loads only in a
- * hidden web view that never shows on screen (context stories-tray). This
- * reads the tray and posts it to native, which draws its own row of story
- * circles. Polled on a timer as well as on DOM changes, because a web view
- * that is never on screen may not get animation frames. */
-function watchStoriesTray(): void {
-  const context = (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__;
-  if (context !== 'stories-tray' || typeof document === 'undefined') return;
-  const post = createPoster('instagram');
-  const started = Date.now();
-  let last = '';
-  const check = (): void => {
-    try {
-      // Also on the timer: a never shown web view may get no animation frames.
-      silenceVideos();
-      if (!pageScopes(location.pathname).includes('home')) return;
-      const items = readStoryItems(document);
-      const done = items.length > 0 || Date.now() - started > TRAY_GIVE_UP_MS;
-      const key = JSON.stringify([items, done]);
-      if (key === last) return;
-      last = key;
-      post({ type: 'ig-stories', items, done });
-    } catch (error) {
-      console.warn('[unfeed] stories tray read failed', error);
-    }
-  };
-  window.setInterval(check, 700);
-  let pending = false;
-  if (typeof MutationObserver !== 'undefined') {
-    new MutationObserver(() => {
-      if (pending) return;
-      pending = true;
-      setTimeout(() => {
-        pending = false;
-        check();
-      }, 150);
-    }).observe(document, { childList: true, subtree: true });
-  }
-}
-
 /** Videos friends send (Denis, 23 Oct 2026): keep them playing inside the
  * page, so iOS never throws them into its own sideways full screen player. */
 const keepVideosInline: HideSweep = () => {
@@ -290,19 +254,6 @@ const keepVideosInline: HideSweep = () => {
     video.setAttribute('webkit-playsinline', '');
     video.playsInline = true;
   }
-};
-
-/** The hidden stories tray reader must never make a sound: home's feed
- * videos stay muted and paused there. */
-function silenceVideos(): void {
-  for (const video of document.querySelectorAll('video')) {
-    video.muted = true;
-    if (!video.paused) video.pause();
-  }
-}
-
-const silenceHiddenPage: HideSweep = () => {
-  if ((globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__ === 'stories-tray') silenceVideos();
 };
 
 /** Sound for videos (Denis, 25 Oct 2026). Instagram's site starts every
@@ -371,16 +322,11 @@ function giveSound(video: HTMLVideoElement, state: SoundState): void {
 function installVideoSound(): void {
   if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
   const state: SoundState = { userChose: false, ourChangeUntil: 0, given: new WeakSet() };
-  const hiddenReader = () => (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__ === 'stories-tray';
   document.addEventListener(
     'play',
     (event) => {
       const video = event.target;
       if (!(video instanceof HTMLVideoElement)) return;
-      if (hiddenReader()) {
-        silenceVideos();
-        return;
-      }
       if (state.userChose || state.given.has(video)) return;
       giveSound(video, state);
     },
@@ -478,10 +424,9 @@ function installCreateHook(): void {
 
 installCreateHook();
 installVideoSound();
-watchStoriesTray();
 
 setupInject('instagram', {
-  sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, keepVideosInline, silenceHiddenPage],
+  sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, hideRelatedPosts, keepVideosInline],
   unread: true,
   enforce: true,
 });

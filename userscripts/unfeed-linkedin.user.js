@@ -30,31 +30,6 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
 [data-unfeed-hidden] {
   display: none !important;
 }
-
-/* Unfeed's colours and font on the page (Denis, 25 Oct 2026). Only LinkedIn's
-   own colour variables are set, so nothing can end up dark on dark if the
-   site renames them. The app's dark appearance also asks the page for its
-   dark mode. */
-:root {
-  color-scheme: dark !important;
-  --color-background-canvas: #0b0b0d !important;
-  --color-background-container: #121215 !important;
-  --color-background-container-tint: #1c1c20 !important;
-  --color-background-scrim: rgba(0, 0, 0, 0.55) !important;
-  --color-text: #f2f2f4 !important;
-  --color-text-low-emphasis: #9a9aa3 !important;
-  --color-text-secondary: #9a9aa3 !important;
-  --color-icon: #e8e8ea !important;
-  --color-border: #2a2a30 !important;
-  --color-border-faint: #2a2a30 !important;
-  --color-divider: #2a2a30 !important;
-}
-body,
-button,
-input,
-textarea {
-  font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif !important;
-}
 `;
 
   // src/rules/instagram.json
@@ -74,7 +49,6 @@ textarea {
       },
       { id: "ig-2-direct", match: { kind: "prefix", paths: ["/direct/"] }, action: "allow" },
       { id: "ig-3-stories", match: { kind: "prefix", paths: ["/stories/"] }, action: "allow" },
-      { id: "ig-4-home-stories-tray", match: { kind: "home", context: "stories-tray" }, action: "allow" },
       { id: "ig-5-home", match: { kind: "home" }, action: "redirect", to: "/direct/inbox/" },
       { id: "ig-6-explore-search", match: { kind: "prefix", paths: ["/explore/search/"] }, action: "allow" },
       { id: "ig-7-explore", match: { kind: "prefix", paths: ["/explore/"] }, action: "redirect", to: "/explore/search/" },
@@ -337,6 +311,23 @@ textarea {
     return { action: "allow", rule: "unmatched-fallback" };
   }
 
+  // src/rules/returnRules.ts
+  var RETURN_RULES = /* @__PURE__ */ new Set(["ig-5-home", "ig-8-reels", "li-9-feed", "li-9-home"]);
+  function isReturnablePage(url) {
+    try {
+      const path = new URL(url).pathname.toLowerCase();
+      return !path.startsWith("/stories/") && path !== "/" && path !== "/feed/" && !path.startsWith("/accounts/login");
+    } catch {
+      return false;
+    }
+  }
+  function returnTarget(rule, ruleTarget, lastGood, homeUrl, blockedUrl) {
+    if (!rule || !RETURN_RULES.has(rule)) return ruleTarget;
+    if (lastGood && lastGood !== blockedUrl) return lastGood;
+    if (homeUrl && homeUrl !== blockedUrl) return homeUrl;
+    return ruleTarget;
+  }
+
   // src/inject/protocol.ts
   var DEFAULT_INJECT_SETTINGS = {
     allowSharedPosts: true,
@@ -352,7 +343,7 @@ textarea {
   }
 
   // src/inject/common.ts
-  var INJECT_VERSION = "t3.1";
+  var INJECT_VERSION = "t3.2";
   function createPoster(site) {
     return (message) => {
       try {
@@ -429,16 +420,41 @@ textarea {
       }
     };
   }
+  var LAST_GOOD_KEY = "unfeed-last-good";
+  function readLastGood() {
+    var _a, _b;
+    try {
+      return (_b = (_a = window.sessionStorage) == null ? void 0 : _a.getItem(LAST_GOOD_KEY)) != null ? _b : null;
+    } catch {
+      return null;
+    }
+  }
+  function saveLastGood(href) {
+    var _a;
+    try {
+      (_a = window.sessionStorage) == null ? void 0 : _a.setItem(LAST_GOOD_KEY, href);
+    } catch {
+    }
+  }
+  function declaredHome() {
+    const home = globalThis.__UNFEED_HOME__;
+    return typeof home === "string" && home ? home : null;
+  }
   function enforceRoute(site, settings, href, post) {
     var _a;
     try {
       const declared = globalThis.__UNFEED_CONTEXT__;
       const context = typeof declared === "string" && declared ? declared : "page";
       const result = decide(site, href, context, settings);
+      if (result.action === "allow") {
+        if (isReturnablePage(href)) saveLastGood(href);
+        return;
+      }
       if (result.action !== "redirect" || !result.to) return;
-      const target = new URL(result.to, location.origin).href;
+      const ruleTarget = new URL(result.to, location.origin).href;
+      const target = returnTarget(result.rule, ruleTarget, readLastGood(), declaredHome(), href);
       if (target === location.href) return;
-      post({ type: "bounce", url: href, rule: (_a = result.rule) != null ? _a : "unknown", to: result.to });
+      post({ type: "bounce", url: href, rule: (_a = result.rule) != null ? _a : "unknown", to: target === ruleTarget ? result.to : target });
       window.location.replace(target);
     } catch (error) {
       console.warn("[unfeed] in-page enforce failed", site, error);

@@ -1,6 +1,6 @@
-// Instagram host: one persistent WebView that the native tabs steer by URL
-// (charter sections 4 and 8.6). Tabs move this WebView to a new URL; they
-// never create a second one.
+// Instagram host: one web view for one of the app's own Instagram tabs. The
+// shell keeps one per opened tab (Denis, 26 Oct 2026), so a tab keeps its page
+// and scroll while another one is showing.
 
 import { forwardRef } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -20,8 +20,10 @@ export type { WebViewHostApi as InstagramHostHandle };
 interface InstagramHostProps {
   /** Full URL to show right now; the shell owns the tab to URL mapping. */
   url: string;
-  /** Native tab context: search, dms, profile or stories. */
+  /** Native tab context: search, dms, activity or profile. */
   context: string;
+  /** The tab's own start page, where a home redirect returns to. */
+  homeUrl?: string | null;
   settings: HostSettings;
   onMessage?: (message: PageMessage) => void;
   /** Bump to scroll the page to the top (active tab re-press). */
@@ -30,7 +32,7 @@ interface InstagramHostProps {
 }
 
 export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(function InstagramHost(
-  { url, context, settings, onMessage, scrollToTopSignal, style }: InstagramHostProps,
+  { url, context, homeUrl, settings, onMessage, scrollToTopSignal, style }: InstagramHostProps,
   ref,
 ) {
   // Web preview labels per tab, so the screenshots read like the real screens.
@@ -38,7 +40,7 @@ export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(func
     search: 'Instagram search (web preview)',
     dms: 'Instagram DMs (web preview)',
     profile: 'Instagram profile (web preview)',
-    stories: 'Instagram stories tray (web preview)',
+    activity: 'Instagram notifications (web preview)',
   };
   return (
     <WebViewHost
@@ -46,6 +48,7 @@ export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(func
       site="instagram"
       url={url}
       context={context}
+      homeUrl={homeUrl}
       settings={settings}
       hideCounts={settings.hideCounts ?? false}
       injectScript={INSTAGRAM_INJECT_SCRIPT}

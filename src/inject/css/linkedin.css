@@ -15,28 +15,3 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
 [data-unfeed-hidden] {
   display: none !important;
 }
-
-/* Unfeed's colours and font on the page (Denis, 25 Oct 2026). Only LinkedIn's
-   own colour variables are set, so nothing can end up dark on dark if the
-   site renames them. The app's dark appearance also asks the page for its
-   dark mode. */
-:root {
-  color-scheme: dark !important;
-  --color-background-canvas: #0b0b0d !important;
-  --color-background-container: #121215 !important;
-  --color-background-container-tint: #1c1c20 !important;
-  --color-background-scrim: rgba(0, 0, 0, 0.55) !important;
-  --color-text: #f2f2f4 !important;
-  --color-text-low-emphasis: #9a9aa3 !important;
-  --color-text-secondary: #9a9aa3 !important;
-  --color-icon: #e8e8ea !important;
-  --color-border: #2a2a30 !important;
-  --color-border-faint: #2a2a30 !important;
-  --color-divider: #2a2a30 !important;
-}
-body,
-button,
-input,
-textarea {
-  font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif !important;
-}

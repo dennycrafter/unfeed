@@ -267,14 +267,15 @@ test('own bars: a header with a single link back to Messages is page content and
   await expect(page.locator('h1.profile-name')).toBeVisible();
 });
 
-test('theme: the page gets the app colours through LinkedIn variables only', async ({ page }) => {
+// Clean and basic (Denis, 26 Oct 2026): the forced colours and font broke
+// Messages, so the page keeps LinkedIn's own look.
+test('no colours or fonts are forced on the page', async ({ page }) => {
   await routeFixture(page, 'linkedin-messaging.html');
   await prepare(page);
   await page.goto('https://www.linkedin.com/messaging/');
   const canvas = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-background-canvas').trim());
-  expect(canvas).toBe('#0b0b0d');
-  // The body itself is never forced dark, so unknown text colours stay readable.
-  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  expect(canvas).toBe('');
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('normal');
 });
 
 test('own bars: a pinned full screen shell is the page, not a bar, and stays', async ({ page }) => {

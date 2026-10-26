@@ -4,10 +4,11 @@
 // no react-native imports and no node APIs.
 
 import { decide, type Site } from '../rules/decide';
+import { isReturnablePage, returnTarget } from '../rules/returnRules';
 import { DEFAULT_INJECT_SETTINGS, type InjectSettings, type PageMessage } from './protocol';
 import { parseUnreadFromTitle } from './unread';
 
-export const INJECT_VERSION = 't3.1';
+export const INJECT_VERSION = 't3.2';
 
 type PostMessage = (message: PageMessage) => void;
 
@@ -130,22 +131,51 @@ function createApplyPass(site: Site, settings: InjectSettings, config: InjectCon
   };
 }
 
+const LAST_GOOD_KEY = 'unfeed-last-good';
+
+/** The last allowed page this tab showed, kept for the page's lifetime in
+ * session storage so a full reload still knows it. */
+function readLastGood(): string | null {
+  try {
+    return window.sessionStorage?.getItem(LAST_GOOD_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastGood(href: string): void {
+  try {
+    window.sessionStorage?.setItem(LAST_GOOD_KEY, href);
+  } catch {
+    // Storage can be blocked; returning then falls back to the tab's page.
+  }
+}
+
+function declaredHome(): string | null {
+  const home = (globalThis as { __UNFEED_HOME__?: unknown }).__UNFEED_HOME__;
+  return typeof home === 'string' && home ? home : null;
+}
+
 /** The in-page second line of defence (charter section 4): the same decide()
  * the native side runs, resolving redirects against the current origin. The
  * page reads the tab context the native side declared in the preamble, so
- * context dependent rows (Instagram's home rule) behave as native intends. */
+ * context dependent rows (Instagram's home rule) behave as native intends.
+ * Home and feed redirects go back to the last allowed page of this tab
+ * instead (src/rules/returnRules.ts). */
 function enforceRoute(site: Site, settings: InjectSettings, href: string, post: PostMessage): void {
   try {
-    // The native side declares the tab that caused this load through the
-    // preamble (Instagram's home rule is context dependent); pages without
-    // it keep the neutral context.
     const declared = (globalThis as { __UNFEED_CONTEXT__?: unknown }).__UNFEED_CONTEXT__;
     const context = typeof declared === 'string' && declared ? declared : 'page';
     const result = decide(site, href, context, settings);
+    if (result.action === 'allow') {
+      if (isReturnablePage(href)) saveLastGood(href);
+      return;
+    }
     if (result.action !== 'redirect' || !result.to) return;
-    const target = new URL(result.to, location.origin).href;
+    const ruleTarget = new URL(result.to, location.origin).href;
+    const target = returnTarget(result.rule, ruleTarget, readLastGood(), declaredHome(), href);
     if (target === location.href) return;
-    post({ type: 'bounce', url: href, rule: result.rule ?? 'unknown', to: result.to });
+    post({ type: 'bounce', url: href, rule: result.rule ?? 'unknown', to: target === ruleTarget ? result.to : target });
     window.location.replace(target);
   } catch (error) {
     console.warn('[unfeed] in-page enforce failed', site, error);

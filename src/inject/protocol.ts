@@ -8,9 +8,6 @@ export type PageMessage =
   | { type: 'inject-error'; message: string }
   | { type: 'ig-username'; value: string }
   | { type: 'ig-create-missing' }
-  /** The stories tray as the hidden reader sees it. done: the tray was found,
-   * or the reader gave up looking (an empty tray). */
-  | { type: 'ig-stories'; items: { username: string; avatar: string | null }[]; done: boolean }
   | { type: 'li-own-profile'; url: string }
   | { type: 'li-composer'; open: boolean }
   /** The page sent itself somewhere else (in-page guard, composer closed),
@@ -26,22 +23,6 @@ export function isPageMessage(value: unknown): value is PageMessage {
   if (record.type === 'inject-error') return typeof record.message === 'string';
   if (record.type === 'ig-username') return typeof record.value === 'string' && record.value.length > 0;
   if (record.type === 'ig-create-missing') return true;
-  if (record.type === 'ig-stories') {
-    return (
-      typeof record.done === 'boolean' &&
-      Array.isArray(record.items) &&
-      record.items.length <= 200 &&
-      record.items.every((item: unknown) => {
-        if (typeof item !== 'object' || item === null) return false;
-        const story = item as Record<string, unknown>;
-        return (
-          typeof story.username === 'string' &&
-          story.username.length > 0 &&
-          (story.avatar === null || typeof story.avatar === 'string')
-        );
-      })
-    );
-  }
   if (record.type === 'li-own-profile') return typeof record.url === 'string' && record.url.length > 0;
   if (record.type === 'li-composer') return typeof record.open === 'boolean';
   if (record.type === 'bounce') {

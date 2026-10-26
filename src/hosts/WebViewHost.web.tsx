@@ -1,10 +1,10 @@
 // Web stand in for react-native-webview, which has no web support (gotcha 8).
 // It runs the same route guard and renders a placeholder panel saying which
 // URL the native WebView would load, so the shell can be screenshotted from
-// the web export. The imperative handle is a no-op: the web preview has no
-// WebView history.
+// the web export. The imperative handle is a no-op apart from open, which
+// shows the opened address: the web preview has no WebView history.
 
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { decide, toAbsoluteUrl } from '../rules/decide';
 import { colors, radius } from '../theme/tokens';
@@ -14,8 +14,14 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   { site, url, context, settings, placeholderLabel },
   ref,
 ) {
-  const result = decide(site, url, context, settings);
-  const displayUrl = result.action === 'redirect' ? toAbsoluteUrl(site, result.to ?? '/') : url;
+  // An address opened through the handle (a scanned or pasted link) shows
+  // until the shell sends a new one.
+  const [shown, setShown] = useState(url);
+  useEffect(() => {
+    setShown(url);
+  }, [url]);
+  const result = decide(site, shown, context, settings);
+  const displayUrl = result.action === 'redirect' ? toAbsoluteUrl(site, result.to ?? '/') : shown;
   const siteLabel = site === 'instagram' ? 'Instagram' : 'LinkedIn';
 
   // No real page on web: the tab behaviour API is a no-op.
@@ -26,6 +32,9 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
     clearCache() {},
     runScript() {},
     setContext() {},
+    open(target: string) {
+      setShown(target);
+    },
   });
   useImperativeHandle(ref, () => api.current, []);
 
