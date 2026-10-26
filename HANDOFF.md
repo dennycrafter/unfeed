@@ -75,6 +75,7 @@ Built overnight on 10 Oct 2026 with Obvious (obvious.ai Autobuild) during a hack
   - Forced page colours and fonts removed on both sites.
   - Link button only on Instagram; LinkedIn's Post composer opens in its own web view over the tab.
   - iOS dropping a background page now reloads it instead of leaving it blank.
+  - Auto publish: `.github/workflows/publish.yml` publishes an EAS Update to branch main after CI passes on main. Needs the `EXPO_TOKEN` repo secret (an access token from expo.dev); without it the job skips. `npm run publish:phone` still works by hand.
 
 ## Known limits (not bugs)
 - **It runs inside Expo Go, not as its own app.** A standalone app with its own icon needs a paid Apple developer account ($99 a year), which I don't have.

@@ -33,8 +33,8 @@ The phone still needs internet, the same as the real Instagram and LinkedIn apps
 
 ### Sending a new version to the phone
 
-After any change to the app, run this once on the PC in the project folder: npm run publish:phone
-Then close and reopen unfeed in Expo Go. It picks up the new version.
+Every change merged into main is published to the phone by itself (GitHub Actions, "Publish to phone"), once the CI checks pass. It needs the EXPO_TOKEN secret in the repo settings. Then close and reopen unfeed in Expo Go. It picks up the new version.
+To publish by hand from the PC instead, run this once in the project folder: npm run publish:phone
 
 The upload is marked for Expo Go SDK 58 (app.json, ios.runtimeVersion policy "sdkVersion"). Keep it that way: Expo Go only opens updates marked with its own SDK.
 
