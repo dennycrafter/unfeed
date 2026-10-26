@@ -79,17 +79,17 @@ export function IconAvatar({ color = colors.muted, size = 24 }: IconProps) {
   );
 }
 
-/** The settings gear, drawn from simple strokes. */
+/** The settings gear: eight square teeth around a ring with a round hole,
+ * so it reads as Settings at a glance (the old spoked one looked like a sun,
+ * Denis 25 Oct 2026). The outline is generated, not traced from any app. */
+export const GEAR_OUTLINE =
+  'M10.22 4.82 L10.36 2.14 L13.64 2.14 L13.78 4.82 L15.82 5.66 L17.81 3.86 L20.14 6.19 L18.34 8.18 L19.18 10.22 L21.86 10.36 L21.86 13.64 L19.18 13.78 L18.34 15.82 L20.14 17.81 L17.81 20.14 L15.82 18.34 L13.78 19.18 L13.64 21.86 L10.36 21.86 L10.22 19.18 L8.18 18.34 L6.19 20.14 L3.86 17.81 L5.66 15.82 L4.82 13.78 L2.14 13.64 L2.14 10.36 L4.82 10.22 L5.66 8.18 L3.86 6.19 L6.19 3.86 L8.18 5.66 Z';
+
 export function IconGear({ color = colors.muted, size = 24 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="3.25" stroke={color} strokeWidth="1.8" />
-      <Path
-        d="M12 3.5v2.6M12 17.9v2.6M3.5 12h2.6M17.9 12h2.6M6 6l1.9 1.9M16.1 16.1 18 18M18 6l-1.9 1.9M7.9 16.1 6 18"
-        stroke={color}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <Path d={GEAR_OUTLINE} stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
+      <Circle cx="12" cy="12" r="3.1" stroke={color} strokeWidth="1.6" />
     </Svg>
   );
 }
