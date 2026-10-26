@@ -30,8 +30,9 @@ function isOnProfilePage(): boolean {
   return location.pathname.toLowerCase().startsWith('/in/');
 }
 
-/** Search pages: hide the posts filter chip, any section titled Posts and
- * the post cards themselves (they carry a stable data-urn attribute). */
+/** Search pages: hide the posts filter chip and any section titled Posts,
+ * the way into content search (rule li-5). Single post cards elsewhere stay:
+ * only the feed loses its cards (Denis, 25 Oct 2026). */
 const hideSearchPosts: HideSweep = () => {
   if (!isOnSearchPage()) return;
   for (const chip of document.querySelectorAll('button, a')) {
@@ -43,15 +44,13 @@ const hideSearchPosts: HideSweep = () => {
       hide(heading.closest('section') ?? heading.closest('div') ?? heading);
     }
   }
-  hideAllMatching(
-    document,
-    '[data-urn^="urn:li:share"], [data-urn^="urn:li:activity"], [data-urn^="urn:li:ugcPost"]',
-  );
 };
 
-/** Profiles: hide the Activity section and the people suggestions. Their
- * headings are stable text; the section around each heading goes. */
-const PROFILE_HEADING_TEXTS = ['activity', 'more profiles for you', 'people you may know'];
+/** Profiles: hide the people suggestions. Their headings are stable text;
+ * the section around each heading goes. The Activity section and the
+ * recent activity pages stay (Denis, 25 Oct 2026): they are one person's
+ * posts, not the feed. */
+const PROFILE_HEADING_TEXTS = ['more profiles for you', 'people you may know'];
 
 const hideProfileSuggestions: HideSweep = () => {
   if (!isOnProfilePage()) return;
@@ -199,10 +198,16 @@ const hideHomeItem: HideSweep = () => {
   }
 };
 
-/** The post composer can open on /feed/ (shareActive). The feed behind it
- * goes: every update card carries a stable activity or share urn. */
+/** Only the feed itself loses its post cards: the composer can open over
+ * /feed/ (shareActive), and every update card there carries a stable
+ * activity or share urn. A single post (/feed/update/...) is not the feed,
+ * so its card stays (Denis, 25 Oct 2026). */
+function isFeedPage(pathname: string): boolean {
+  return pathname.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/?$/, '/') === '/feed/';
+}
+
 const hideFeedBehindComposer: HideSweep = () => {
-  if (!location.pathname.toLowerCase().startsWith('/feed')) return;
+  if (!isFeedPage(location.pathname)) return;
   hideAllMatching(
     document,
     '[data-urn^="urn:li:activity"], [data-urn^="urn:li:share"], [data-urn^="urn:li:ugcPost"], [data-id^="urn:li:activity"]',

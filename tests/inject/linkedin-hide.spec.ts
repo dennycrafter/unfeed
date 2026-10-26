@@ -102,12 +102,15 @@ test('search fixture: posts chip and posts section hide, people results survive'
   await expect(page.getByText('Ada Lovelace')).toBeVisible();
 });
 
-test('profile fixture: activity and suggestions hide, identity and upsells behave', async ({ page }) => {
+test('profile fixture: suggestions hide, Activity stays, identity and upsells behave', async ({ page }) => {
   await routeFixture(page, 'linkedin-profile.html');
   await prepare(page);
   await page.goto('https://www.linkedin.com/in/someone/');
 
-  await expect(page.locator('section.profile-activity')).toBeHidden();
+  // The Activity section is one person's posts, not the feed (Denis, 25 Oct 2026).
+  await expect(page.locator('section.profile-activity')).toBeVisible();
+  await expect(page.getByText("Ada's latest post.")).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Show all posts' })).toBeVisible();
   await expect(page.locator('section.profile-suggestions')).toBeHidden();
   await expect(page.locator('section.profile-suggestions-more')).toBeHidden();
   await expect(page.locator('.premium-upsell-link')).toBeHidden();
@@ -115,6 +118,38 @@ test('profile fixture: activity and suggestions hide, identity and upsells behav
   await expect(page.locator('.profile-headline')).toBeVisible();
   // hideCounts defaults to false, so the count stays until the setting is on.
   await expect(page.locator('.connection-count')).toBeVisible();
+});
+
+test('recent activity page: every post card and the Activity heading stay', async ({ page }) => {
+  await routeFixture(page, 'linkedin-recent-activity.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/in/someone/recent-activity/all/');
+  await page.waitForTimeout(300);
+  expect(new URL(page.url()).pathname).toBe('/in/someone/recent-activity/all/');
+  await expect(page.locator('h2', { hasText: 'Activity' })).toBeVisible();
+  await expect(page.getByText("Ada's own post about engines.")).toBeVisible();
+  await expect(page.getByText('Ada shared an article.')).toBeVisible();
+  await expect(page.getByText("Ada's video post.")).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open post' })).toBeVisible();
+  await expect(page.locator('.activity-tabs button', { hasText: 'Posts' })).toBeVisible();
+});
+
+test('single post page: the post card stays, it is not the feed', async ({ page }) => {
+  await routeFixture(page, 'linkedin-recent-activity.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/feed/update/urn:li:activity:7001/');
+  await page.waitForTimeout(300);
+  expect(new URL(page.url()).pathname).toBe('/feed/update/urn:li:activity:7001/');
+  await expect(page.getByText("Ada's own post about engines.")).toBeVisible();
+});
+
+test('single post page stays even with the old shared posts setting off', async ({ page }) => {
+  await routeFixture(page, 'linkedin-recent-activity.html');
+  await prepare(page, { allowSharedPosts: false, hideCounts: false });
+  await page.goto('https://www.linkedin.com/posts/ada-lovelace-engines-7001/');
+  await page.waitForTimeout(300);
+  expect(new URL(page.url()).pathname).toBe('/posts/ada-lovelace-engines-7001/');
+  await expect(page.getByText("Ada's own post about engines.")).toBeVisible();
 });
 
 test('own profile fixture: the vanity is read from the edit links while on /in/me/', async ({ page }) => {
