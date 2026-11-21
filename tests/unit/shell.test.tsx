@@ -462,3 +462,57 @@ test('a bounce the page reports itself is kept too', async () => {
   });
   expect(getBounces()[0]).toMatchObject({ site: 'linkedin', rule: 'li-composer-closed' });
 });
+
+// Speed (Denis, 21 Nov 2026): tabs load in the background, stay invisible
+// until tapped, and a tapped tab whose page already painted is ready at once.
+test('Instagram Notifications and Profile, then LinkedIn Notifications and Profile, load in the background', async () => {
+  jest.useFakeTimers();
+  try {
+    await hydrateSettings();
+    const { getByLabelText, getByTestId, queryByTestId } = await render(<Shell />);
+    expect(queryByTestId('ig-tab-activity', anyVisibility)).toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(12000);
+    });
+    for (const tab of ['ig-tab-activity', 'ig-tab-profile', 'li-tab-notifications', 'li-tab-profile']) {
+      const view = getByTestId(tab, anyVisibility) as unknown as StylefulElement;
+      // Laid out full size but invisible, not display none, so the page fits the screen.
+      expect(isHidden(view)).toBe(false);
+      expect(StyleSheet.flatten(view.props.style as never)).toMatchObject({ opacity: 0 });
+    }
+    // Search never preloads.
+    expect(queryByTestId('ig-tab-search', anyVisibility)).toBeNull();
+    expect(queryByTestId('li-tab-search', anyVisibility)).toBeNull();
+    // Tapped: it shows, and once left it is simply hidden.
+    await fireEvent.press(getByLabelText('Notifications tab'));
+    expect(StyleSheet.flatten((getByTestId('ig-tab-activity', anyVisibility) as unknown as StylefulElement).props.style as never)).not.toMatchObject({ opacity: 0 });
+    await fireEvent.press(getByLabelText('DMs tab'));
+    expect(isHidden(getByTestId('ig-tab-activity', anyVisibility) as unknown as StylefulElement)).toBe(true);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('a preloaded tab that already painted is ready the moment it is tapped', async () => {
+  const { getSpeedEntries, resetSpeedLogForTest } = require('../../src/state/perfLog') as typeof import('../../src/state/perfLog');
+  resetSpeedLogForTest();
+  jest.useFakeTimers();
+  try {
+    await hydrateSettings();
+    const { getByLabelText, getByTestId } = await render(<Shell />);
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
+    const page = tabWebView(getByTestId, 'ig-tab-activity');
+    // The page placeholder shows until the page paints.
+    expect(within(getByTestId('ig-tab-activity', anyVisibility) as never).queryByTestId('page-skeleton', anyVisibility)).not.toBeNull();
+    await postFromPage(page, { type: 'perf', kind: 'load', url: 'https://www.instagram.com/accounts/activity/', ms: 900 });
+    expect(within(getByTestId('ig-tab-activity', anyVisibility) as never).queryByTestId('page-skeleton', anyVisibility)).toBeNull();
+    // Painted in the background, so nothing is waited for on the tap.
+    expect(getSpeedEntries().filter((entry) => entry.kind === 'tab' && entry.url.includes('activity'))).toEqual([]);
+    await fireEvent.press(getByLabelText('Notifications tab'));
+    expect(getSpeedEntries().find((entry) => entry.kind === 'tab' && entry.url.includes('activity'))).toMatchObject({ ms: 0 });
+  } finally {
+    jest.useRealTimers();
+  }
+});

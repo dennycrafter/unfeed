@@ -391,6 +391,28 @@ footer:has(a[href*="/legal/"]) {
     hideCounts: false
   };
 
+  // src/inject/junk.ts
+  var JUNK = [
+    // Instagram's own event logging ("banzai").
+    /^https:\/\/(www\.)?instagram\.com\/ajax\/bz\b/,
+    /^https:\/\/(www\.)?instagram\.com\/logging\//,
+    /^https:\/\/graph\.instagram\.com\/logging_client_events\b/,
+    // LinkedIn ad tags and tracking pixels.
+    /^https:\/\/(www\.)?linkedin\.com\/tscp-serving\//,
+    /^https:\/\/(www\.)?linkedin\.com\/li\/track\b/,
+    /^https:\/\/px\.ads\.linkedin\.com\//,
+    /^https:\/\/snap\.licdn\.com\/li\.lms-analytics\//
+  ];
+  function isJunk(url, origin) {
+    let absolute;
+    try {
+      absolute = new URL(url, origin).href;
+    } catch {
+      return false;
+    }
+    return JUNK.some((pattern) => pattern.test(absolute));
+  }
+
   // src/inject/unread.ts
   function parseUnreadFromTitle(title) {
     const match = /^\s*\((\d{1,3})\)(?:\s|$)/.exec(title);
@@ -543,17 +565,100 @@ footer:has(a[href*="/legal/"]) {
     onRoute(currentHref(win));
   }
   function reportLoadSpeed(post) {
-    const send = () => {
+    let sent = false;
+    const send = (ms) => {
+      if (sent || !Number.isFinite(ms) || ms <= 0) return;
+      sent = true;
+      post({ type: "perf", kind: "load", url: location.href, ms: Math.round(ms) });
+    };
+    try {
+      if (typeof PerformanceObserver === "function") {
+        const observer = new PerformanceObserver((list) => {
+          const paint = list.getEntriesByName("first-contentful-paint")[0];
+          if (paint) {
+            observer.disconnect();
+            send(paint.startTime);
+          }
+        });
+        observer.observe({ type: "paint", buffered: true });
+      }
+    } catch {
+    }
+    const fallback = () => {
       try {
         const paint = performance.getEntriesByName("first-contentful-paint")[0];
         const nav = performance.getEntriesByType("navigation")[0];
-        const ms = paint ? paint.startTime : nav ? nav.domContentLoadedEventEnd : NaN;
-        if (Number.isFinite(ms) && ms > 0) post({ type: "perf", kind: "load", url: location.href, ms: Math.round(ms) });
+        send(paint ? paint.startTime : nav ? nav.domContentLoadedEventEnd : performance.now());
       } catch {
       }
     };
-    if (document.readyState === "complete") window.setTimeout(send, 0);
-    else window.addEventListener("load", () => window.setTimeout(send, 0), { once: true });
+    if (document.readyState === "complete") window.setTimeout(fallback, 0);
+    else window.addEventListener("load", () => window.setTimeout(fallback, 0), { once: true });
+  }
+  function darkUntilStyled() {
+    const id = "unfeed-loading-canvas";
+    installStyle(id, ":root{color-scheme:dark;background:#0b0b0d}");
+    const remove = () => {
+      var _a;
+      return (_a = document.getElementById(id)) == null ? void 0 : _a.remove();
+    };
+    if (document.readyState !== "loading") window.setTimeout(remove, 0);
+    else document.addEventListener("DOMContentLoaded", remove, { once: true });
+  }
+  function blockJunk(post) {
+    var _a;
+    const scope = globalThis;
+    const origin = typeof location !== "undefined" ? location.origin : void 0;
+    const count = () => {
+      var _a2;
+      scope.__UNFEED_JUNK__ = ((_a2 = scope.__UNFEED_JUNK__) != null ? _a2 : 0) + 1;
+    };
+    const originalFetch = scope.fetch;
+    if (typeof originalFetch === "function") {
+      scope.fetch = function fetchWithoutJunk(input, init) {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (isJunk(url, origin)) {
+          count();
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        return originalFetch.call(this, input, init);
+      };
+    }
+    const beacon = (_a = scope.navigator) == null ? void 0 : _a.sendBeacon;
+    if (scope.navigator && typeof beacon === "function") {
+      scope.navigator.sendBeacon = function sendBeaconWithoutJunk(url, data) {
+        if (isJunk(String(url), origin)) {
+          count();
+          return true;
+        }
+        return beacon.call(this, url, data);
+      };
+    }
+    const Xhr = scope.XMLHttpRequest;
+    if (typeof Xhr === "function") {
+      const junkRequests = /* @__PURE__ */ new WeakSet();
+      const open = Xhr.prototype.open;
+      const send = Xhr.prototype.send;
+      Xhr.prototype.open = function openWithoutJunk(...args) {
+        if (isJunk(String(args[1]), origin)) junkRequests.add(this);
+        return open.apply(this, args);
+      };
+      Xhr.prototype.send = function sendWithoutJunk(body) {
+        if (!junkRequests.has(this)) {
+          send.call(this, body);
+          return;
+        }
+        count();
+        Object.defineProperty(this, "readyState", { value: 4, configurable: true });
+        Object.defineProperty(this, "status", { value: 204, configurable: true });
+        Object.defineProperty(this, "responseText", { value: "", configurable: true });
+        Object.defineProperty(this, "response", { value: "", configurable: true });
+        window.setTimeout(() => {
+          for (const type of ["readystatechange", "load", "loadend"]) this.dispatchEvent(new Event(type));
+        }, 0);
+      };
+    }
+    void post;
   }
   var SETTLE_QUIET_MS = 300;
   var SETTLE_LIMIT_MS = 8e3;
@@ -632,8 +737,10 @@ footer:has(a[href*="/legal/"]) {
       const win = scope.window;
       if (!win || typeof document === "undefined") return;
       const settings = readInjectSettings();
+      blockJunk(post);
       const apply = createApplyPass(site, settings, config, post);
       whenDocumentReady(() => {
+        darkUntilStyled();
         apply();
         watchDom(apply);
       });

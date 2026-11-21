@@ -6,6 +6,7 @@
 import { decide, type Site } from '../rules/decide';
 import { isReturnablePage, returnTarget } from '../rules/returnRules';
 import { DEFAULT_INJECT_SETTINGS, type InjectSettings, type PageMessage } from './protocol';
+import { isJunk } from './junk';
 import { parseUnreadFromTitle } from './unread';
 
 export const INJECT_VERSION = 't3.2';
@@ -213,21 +214,114 @@ function installRouteHooks(win: MiniWindow, onRoute: (url: string) => void, onMo
 }
 
 /** Speed log (Denis, 21 Nov 2026). A full load reports the time until the
- * first thing showed on screen (the browser's own first paint mark, or the
- * page being read when there is none). */
+ * first thing showed on screen, the moment it shows, so the app can lift
+ * its placeholder right then. Without a paint mark, the page being read
+ * counts, and the load event is the last fallback. */
 function reportLoadSpeed(post: PostMessage): void {
-  const send = (): void => {
+  let sent = false;
+  const send = (ms: number): void => {
+    if (sent || !Number.isFinite(ms) || ms <= 0) return;
+    sent = true;
+    post({ type: 'perf', kind: 'load', url: location.href, ms: Math.round(ms) });
+  };
+  try {
+    if (typeof PerformanceObserver === 'function') {
+      const observer = new PerformanceObserver((list) => {
+        const paint = list.getEntriesByName('first-contentful-paint')[0];
+        if (paint) {
+          observer.disconnect();
+          send(paint.startTime);
+        }
+      });
+      observer.observe({ type: 'paint', buffered: true });
+    }
+  } catch {
+    // No paint observer on this browser: the fallbacks below answer.
+  }
+  const fallback = (): void => {
     try {
       const paint = performance.getEntriesByName('first-contentful-paint')[0];
       const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-      const ms = paint ? paint.startTime : nav ? nav.domContentLoadedEventEnd : NaN;
-      if (Number.isFinite(ms) && ms > 0) post({ type: 'perf', kind: 'load', url: location.href, ms: Math.round(ms) });
+      send(paint ? paint.startTime : nav ? nav.domContentLoadedEventEnd : performance.now());
     } catch {
       // Timing is a nice to have; never disturb the page for it.
     }
   };
-  if (document.readyState === 'complete') window.setTimeout(send, 0);
-  else window.addEventListener('load', () => window.setTimeout(send, 0), { once: true });
+  if (document.readyState === 'complete') window.setTimeout(fallback, 0);
+  else window.addEventListener('load', () => window.setTimeout(fallback, 0), { once: true });
+}
+
+/** No white flash (Denis, 21 Nov 2026): until the site's own styles are in,
+ * the empty page is dark like the app. Removed once the page has been read,
+ * so the site's own colours are never changed. */
+function darkUntilStyled(): void {
+  const id = 'unfeed-loading-canvas';
+  installStyle(id, ':root{color-scheme:dark;background:#0b0b0d}');
+  const remove = (): void => document.getElementById(id)?.remove();
+  if (document.readyState !== 'loading') window.setTimeout(remove, 0);
+  else document.addEventListener('DOMContentLoaded', remove, { once: true });
+}
+
+/** Junk the page never needs (src/inject/junk.ts) answers at once with an
+ * empty success, so nothing waits on it and nothing goes over the network. */
+function blockJunk(post: PostMessage): void {
+  const scope = globalThis as {
+    fetch?: typeof fetch;
+    navigator?: Navigator;
+    XMLHttpRequest?: typeof XMLHttpRequest;
+    __UNFEED_JUNK__?: number;
+  };
+  const origin = typeof location !== 'undefined' ? location.origin : undefined;
+  const count = (): void => {
+    scope.__UNFEED_JUNK__ = (scope.__UNFEED_JUNK__ ?? 0) + 1;
+  };
+  const originalFetch = scope.fetch;
+  if (typeof originalFetch === 'function') {
+    scope.fetch = function fetchWithoutJunk(this: unknown, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (isJunk(url, origin)) {
+        count();
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return originalFetch.call(this, input, init);
+    } as typeof fetch;
+  }
+  const beacon = scope.navigator?.sendBeacon;
+  if (scope.navigator && typeof beacon === 'function') {
+    scope.navigator.sendBeacon = function sendBeaconWithoutJunk(this: Navigator, url: string | URL, data?: BodyInit | null): boolean {
+      if (isJunk(String(url), origin)) {
+        count();
+        return true;
+      }
+      return beacon.call(this, url, data);
+    };
+  }
+  const Xhr = scope.XMLHttpRequest;
+  if (typeof Xhr === 'function') {
+    const junkRequests = new WeakSet<XMLHttpRequest>();
+    const open = Xhr.prototype.open;
+    const send = Xhr.prototype.send;
+    Xhr.prototype.open = function openWithoutJunk(this: XMLHttpRequest, ...args: unknown[]): void {
+      if (isJunk(String(args[1]), origin)) junkRequests.add(this);
+      return (open as (...a: unknown[]) => void).apply(this, args);
+    };
+    Xhr.prototype.send = function sendWithoutJunk(this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null): void {
+      if (!junkRequests.has(this)) {
+        send.call(this, body);
+        return;
+      }
+      count();
+      // Finish it as an empty success, the way a real answer would end.
+      Object.defineProperty(this, 'readyState', { value: 4, configurable: true });
+      Object.defineProperty(this, 'status', { value: 204, configurable: true });
+      Object.defineProperty(this, 'responseText', { value: '', configurable: true });
+      Object.defineProperty(this, 'response', { value: '', configurable: true });
+      window.setTimeout(() => {
+        for (const type of ['readystatechange', 'load', 'loadend']) this.dispatchEvent(new Event(type));
+      }, 0);
+    };
+  }
+  void post;
 }
 
 const SETTLE_QUIET_MS = 300;
@@ -328,9 +422,11 @@ export function setupInject(site: Site, config: InjectConfig = {}): void {
     if (!win || typeof document === 'undefined') return;
 
     const settings = readInjectSettings();
+    blockJunk(post);
     const apply = createApplyPass(site, settings, config, post);
     // Hides and DOM watching need the html element; routes do not.
     whenDocumentReady(() => {
+      darkUntilStyled();
       apply();
       watchDom(apply);
     });

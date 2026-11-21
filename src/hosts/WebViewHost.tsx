@@ -13,6 +13,8 @@ import type {
   WebViewProgressEvent,
 } from 'react-native-webview/lib/WebViewTypes';
 import * as Linking from 'expo-linking';
+import { Skeleton } from '../components/Skeleton';
+import { isJunk } from '../inject/junk';
 import { parsePageMessage } from '../inject/protocol';
 import { buildSettingsPreamble } from '../inject/settingsPreamble';
 import { decide, toAbsoluteUrl, type DecideResult, type Site } from '../rules/decide';
@@ -53,6 +55,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
     style,
     placeholderLabel,
     userAgent = IPHONE_USER_AGENT,
+    active = true,
   },
   ref,
 ) {
@@ -71,6 +74,43 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   // been timed yet.
   const mountedAtRef = useRef(Date.now());
   const openTimedRef = useRef(false);
+  // The page has painted at least once: the placeholder lifts (Denis, 21
+  // Nov 2026). paintedRef mirrors it for callbacks.
+  const [painted, setPainted] = useState(false);
+  const paintedRef = useRef(false);
+  // When the tab was last brought to the front and is still waiting to
+  // show its page, for the "Tab ready after tap" timing.
+  const shownAtRef = useRef<number | null>(active ? Date.now() : null);
+  const markPainted = useCallback((): void => {
+    if (paintedRef.current) return;
+    paintedRef.current = true;
+    setPainted(true);
+    if (shownAtRef.current !== null) {
+      recordSpeed({ at: Date.now(), site, kind: 'tab', ms: Date.now() - shownAtRef.current, url: lastRouteRef.current ?? sourceRef.current });
+      shownAtRef.current = null;
+    }
+  }, [site]);
+
+  // A tab brought to the front: ready at once if its page has painted, or
+  // timed until it does.
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveRef.current) {
+      if (paintedRef.current) {
+        recordSpeed({ at: Date.now(), site, kind: 'tab', ms: 0, url: lastRouteRef.current ?? sourceRef.current });
+      } else {
+        shownAtRef.current = Date.now();
+      }
+    }
+    if (!active) shownAtRef.current = null;
+    wasActiveRef.current = active;
+  }, [active, site]);
+
+  // A page that never reports a paint still lifts its placeholder.
+  useEffect(() => {
+    const timer = setTimeout(() => markPainted(), 10000);
+    return () => clearTimeout(timer);
+  }, [markPainted]);
 
   // Refs keep the latest tab context and settings visible inside callbacks
   // without resubscribing the WebView handler props on every render.
@@ -191,6 +231,8 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         // A real load is under way: the backup redirect is not needed.
         cancelFallback();
       }
+      // Junk frames (ad tags, tracking pixels) never load (src/inject/junk.ts).
+      if (request.isTopFrame === false && isJunk(request.url)) return false;
       const result = runGuard(request.url);
       const decision = loadDecision(result, {
         isTopFrame: request.isTopFrame,
@@ -247,15 +289,19 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
           openTimedRef.current = true;
           recordSpeed({ at: now, site, kind: 'open', ms: now - mountedAtRef.current, url: message.url });
         }
+        if (message.kind === 'load') markPainted();
       }
       onMessageRef.current?.(message);
     },
-    [cancelFallback, openOutside, runGuard, scheduleFallback, site],
+    [cancelFallback, markPainted, openOutside, runGuard, scheduleFallback, site],
   );
 
   // iOS can drop a page that sat in the background to save memory, which
   // leaves it blank. Load it again where it was.
   const handleContentProcessDidTerminate = useCallback(() => {
+    // The page is gone: show the placeholder again until it is back.
+    paintedRef.current = false;
+    setPainted(false);
     webViewRef.current?.reload();
   }, []);
 
@@ -263,7 +309,11 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
     setProgress(event.nativeEvent.progress);
   }, []);
 
-  const handleLoadEnd = useCallback(() => setProgress(0), []);
+  const handleLoadEnd = useCallback(() => {
+    setProgress(0);
+    // Pages without the script's paint report (an error page) still show.
+    markPainted();
+  }, [markPainted]);
 
   // The page reads the settings and the tab context that caused this load
   // before the main script runs (charter sections 8.4 and 8.5).
@@ -306,6 +356,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         onLoadEnd={handleLoadEnd}
         onContentProcessDidTerminate={handleContentProcessDidTerminate}
       />
+      {painted ? null : <Skeleton />}
       {progress > 0 && progress < 1 ? (
         <View style={styles.progressTrack} pointerEvents="none">
           <View style={[styles.progressFill, { width: percentWidth(progress) }]} />

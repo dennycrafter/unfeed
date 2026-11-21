@@ -29,10 +29,12 @@ interface InstagramHostProps {
   /** Bump to scroll the page to the top (active tab re-press). */
   scrollToTopSignal?: number;
   style?: StyleProp<ViewStyle>;
+  /** Whether this tab is the one showing (speed log). */
+  active?: boolean;
 }
 
 export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(function InstagramHost(
-  { url, context, homeUrl, settings, onMessage, scrollToTopSignal, style }: InstagramHostProps,
+  { url, context, homeUrl, settings, onMessage, scrollToTopSignal, style, active }: InstagramHostProps,
   ref,
 ) {
   // Web preview labels per tab, so the screenshots read like the real screens.
@@ -56,6 +58,7 @@ export const InstagramHost = forwardRef<WebViewHostApi, InstagramHostProps>(func
       scrollToTopSignal={scrollToTopSignal}
       style={style}
       placeholderLabel={placeholderLabels[context] ?? 'Instagram (web preview)'}
+      active={active}
     />
   );
 });

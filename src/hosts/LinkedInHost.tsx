@@ -49,6 +49,13 @@ const TABS: BottomTab<LinkedInBarKey>[] = [
 
 const TAB_ORDER: LinkedInTab[] = ['profile', 'messages', 'search', 'notifications'];
 
+/** Speed (Denis, 21 Nov 2026): loaded in the background after launch, one
+ * after another, after Instagram's own preloads. Search has no page until a
+ * search. */
+export const LINKEDIN_PRELOAD_TABS: LinkedInTab[] = ['notifications', 'profile'];
+export const LINKEDIN_PRELOAD_FIRST_MS = 7500;
+export const LINKEDIN_PRELOAD_GAP_MS = 2500;
+
 /** Opened tabs and the address each started on. The Search tab has no page
  * until the first search. */
 type OpenedTabs = Partial<Record<LinkedInTab, string>>;
@@ -88,6 +95,8 @@ export interface LinkedInHostProps {
   openRequest?: { url: string; id: number } | null;
   onMessage?: (message: PageMessage) => void;
   style?: StyleProp<ViewStyle>;
+  /** Whether LinkedIn is the app showing (speed log). */
+  visible?: boolean;
 }
 
 export function LinkedInHost({
@@ -104,6 +113,7 @@ export function LinkedInHost({
   openRequest = null,
   onMessage,
   style,
+  visible = true,
 }: LinkedInHostProps) {
   const hostRefs = useRef<Partial<Record<LinkedInTab, WebViewHostApi | null>>>({});
   const [activeTab, setActiveTab] = useState<LinkedInTab>(DEFAULT_TAB);
@@ -112,6 +122,30 @@ export function LinkedInHost({
   // Post composer (Denis, 23 Oct 2026): its own web view over the tab, gone
   // again once LinkedIn closes the composer.
   const [composerOpen, setComposerOpen] = useState(false);
+  const profileUrlRef = useRef(profileUrl);
+  useLayoutEffect(() => {
+    profileUrlRef.current = profileUrl;
+  }, [profileUrl]);
+
+  // Tabs that have been on screen; a preloaded tab that never showed stays
+  // full size but invisible so its page lays out for the screen.
+  const [seen, setSeen] = useState<Partial<Record<LinkedInTab, true>>>(() => ({ [DEFAULT_TAB]: true }));
+  if (!seen[activeTab]) setSeen((current) => ({ ...current, [activeTab]: true }));
+
+  useEffect(() => {
+    const timers = LINKEDIN_PRELOAD_TABS.map((tab, index) =>
+      setTimeout(
+        () =>
+          setOpened((current) => {
+            if (current[tab]) return current;
+            const start = startUrl(tab, profileUrlRef.current);
+            return start ? { ...current, [tab]: start } : current;
+          }),
+        LINKEDIN_PRELOAD_FIRST_MS + index * LINKEDIN_PRELOAD_GAP_MS,
+      ),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
 
   const stateRef = useRef({ activeTab, qrOpen });
   useEffect(() => {
@@ -337,8 +371,16 @@ export function LinkedInHost({
         {TAB_ORDER.map((tab) => {
           const url = opened[tab];
           if (!url) return null;
+          const showing = tab === activeTab;
           return (
-            <View key={tab} style={[styles.cover, tab !== activeTab && styles.hidden]} testID={`li-tab-${tab}`}>
+            <View
+              key={tab}
+              style={[styles.cover, !showing && (seen[tab] ? styles.hidden : styles.preloading)]}
+              pointerEvents={showing ? 'auto' : 'none'}
+              accessibilityElementsHidden={!showing}
+              importantForAccessibility={showing ? 'auto' : 'no-hide-descendants'}
+              testID={`li-tab-${tab}`}
+            >
               <WebViewHost
                 ref={refFor[tab]}
                 site="linkedin"
@@ -352,6 +394,7 @@ export function LinkedInHost({
                 placeholderLabel={`LinkedIn ${tab} (web preview)`}
                 // Full messaging with reactions and replies (Denis, 21 Nov 2026).
                 userAgent={tab === 'messages' ? IPAD_USER_AGENT : undefined}
+                active={visible && showing && !composerOpen && !qrOpen}
               />
             </View>
           );
@@ -405,4 +448,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   hidden: { display: 'none' },
+  preloading: { opacity: 0, zIndex: -1 },
 });
