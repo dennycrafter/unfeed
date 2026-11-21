@@ -32,6 +32,18 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
 [data-unfeed-hidden] {
   display: none !important;
 }
+
+/* The full messaging in the Messages tab (Denis, 21 Nov 2026) keeps closed
+   menus just past the right edge, which let the page wobble sideways. */
+html {
+  overflow-x: clip;
+}
+
+/* The desktop footer links (About, Accessibility, Help) under the chats. */
+footer:has(a[href*="about.linkedin.com"]),
+footer:has(a[href*="/legal/"]) {
+  display: none !important;
+}
 `;
 
   // src/rules/instagram.json
@@ -75,6 +87,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
     allowedHostSuffixes: ["licdn.com"],
     allowedHostPaths: [],
     alwaysAllowHosts: ["lnkd.in"],
+    pathAliases: ["/mwlite/"],
     rules: [
       {
         id: "li-1-auth",
@@ -206,6 +219,10 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
     }
     const alwaysAllowHosts = file.alwaysAllowHosts === void 0 ? [] : file.alwaysAllowHosts;
     if (!isStringArray(alwaysAllowHosts)) fail(site, "alwaysAllowHosts must be a list of strings");
+    const pathAliases = file.pathAliases === void 0 ? [] : file.pathAliases;
+    if (!isStringArray(pathAliases) || pathAliases.some((alias) => !/^\/[^/]+\/$/.test(alias))) {
+      fail(site, "pathAliases must be one segment prefixes like /mwlite/");
+    }
     if (!Array.isArray(file.rules) || file.rules.length === 0) fail(site, "rules must be a non-empty list");
     const rules = file.rules.map((entry, index) => {
       if (typeof entry !== "object" || entry === null) fail(site, `rule ${index} must be an object`);
@@ -283,6 +300,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       allowedHostSuffixes: allowedHostSuffixes.map((suffix) => suffix.toLowerCase()),
       allowedHostPaths,
       alwaysAllowHosts: alwaysAllowHosts.map((host) => host.toLowerCase()),
+      pathAliases: pathAliases.map((alias) => alias.toLowerCase()),
       rules
     };
   }
@@ -324,7 +342,9 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       return { action: "allow", rule: "non-http-scheme" };
     }
     const host = url.hostname.toLowerCase();
-    const path = normalizePath(url.pathname);
+    let path = normalizePath(url.pathname);
+    const alias = rules.pathAliases.find((prefix) => path.startsWith(prefix));
+    if (alias) path = path.slice(alias.length - 1);
     if (!rules.hosts.includes(host)) {
       if (rules.allowedHostSuffixes.some((suffix) => hostMatches(host, suffix))) {
         return { action: "allow", rule: "asset-host" };

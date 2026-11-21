@@ -118,6 +118,18 @@ export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
     url: 'https://www.linkedin.com/feed/?highlightedUpdateUrn=urn%3Ali%3Amember%3A5',
     expected: toMessaging,
   },
+  // LinkedIn Lite (/mwlite/) is the same site with a prefix: its feed is the
+  // feed, its messages and posts are allowed (Denis, 21 Nov 2026).
+  { name: 'the Lite feed redirects like the feed', url: 'https://www.linkedin.com/mwlite/feed/', expected: toMessaging },
+  { name: 'the Lite home redirects like home', url: 'https://www.linkedin.com/mwlite/', expected: toMessaging },
+  { name: 'Lite messaging allowed', url: 'https://www.linkedin.com/mwlite/messaging/thread/2-abc/', expected: ALLOW },
+  { name: 'a Lite single post allowed', url: 'https://www.linkedin.com/mwlite/feed/update/urn:li:activity:1/', expected: ALLOW },
+  {
+    name: 'a Lite notification link opens the single post',
+    url: 'https://www.linkedin.com/mwlite/feed/?highlightedUpdateUrn=urn%3Ali%3Aactivity%3A3',
+    expected: { action: 'redirect', to: '/feed/update/urn:li:activity:3/' },
+  },
+  { name: 'a profile named like the prefix is not an alias', url: 'https://www.linkedin.com/in/mwlite/', expected: ALLOW },
   // The feed (rule li-9-feed)
   { name: 'the feed root redirects to Messages', url: 'https://www.linkedin.com/feed/', expected: toMessaging },
   { name: 'the feed without a trailing slash redirects', url: 'https://www.linkedin.com/feed', expected: toMessaging },

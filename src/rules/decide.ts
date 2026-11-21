@@ -69,6 +69,9 @@ interface SiteRules {
   /** Hosts where every path loads inside the WebView, for example the
    * lnkd.in short links whose next hop is checked again (LinkedIn rule 13). */
   alwaysAllowHosts: string[];
+  /** Path prefixes that mean the same page as the plain path, for example
+   * LinkedIn Lite's /mwlite/feed/ is the feed (Denis, 21 Nov 2026). */
+  pathAliases: string[];
   rules: RouteRule[];
 }
 
@@ -161,6 +164,11 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
   const alwaysAllowHosts = file.alwaysAllowHosts === undefined ? [] : file.alwaysAllowHosts;
   if (!isStringArray(alwaysAllowHosts)) fail(site, 'alwaysAllowHosts must be a list of strings');
 
+  const pathAliases = file.pathAliases === undefined ? [] : file.pathAliases;
+  if (!isStringArray(pathAliases) || pathAliases.some((alias) => !/^\/[^/]+\/$/.test(alias))) {
+    fail(site, 'pathAliases must be one segment prefixes like /mwlite/');
+  }
+
   if (!Array.isArray(file.rules) || file.rules.length === 0) fail(site, 'rules must be a non-empty list');
   const rules: RouteRule[] = file.rules.map((entry, index) => {
     if (typeof entry !== 'object' || entry === null) fail(site, `rule ${index} must be an object`);
@@ -239,6 +247,7 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
     allowedHostSuffixes: (allowedHostSuffixes as string[]).map((suffix) => suffix.toLowerCase()),
     allowedHostPaths,
     alwaysAllowHosts: (alwaysAllowHosts as string[]).map((host) => host.toLowerCase()),
+    pathAliases: (pathAliases as string[]).map((alias) => alias.toLowerCase()),
     rules,
   };
 }
@@ -297,7 +306,9 @@ export function decide(site: Site, rawUrl: string, context: string, settings: De
     return { action: 'allow', rule: 'non-http-scheme' };
   }
   const host = url.hostname.toLowerCase();
-  const path = normalizePath(url.pathname);
+  let path = normalizePath(url.pathname);
+  const alias = rules.pathAliases.find((prefix) => path.startsWith(prefix));
+  if (alias) path = path.slice(alias.length - 1);
   if (!rules.hosts.includes(host)) {
     if (rules.allowedHostSuffixes.some((suffix) => hostMatches(host, suffix))) {
       return { action: 'allow', rule: 'asset-host' };

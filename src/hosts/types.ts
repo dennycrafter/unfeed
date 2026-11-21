@@ -36,6 +36,9 @@ export interface WebViewHostProps {
   style?: StyleProp<ViewStyle>;
   /** Web preview only: a short label for the placeholder panel. */
   placeholderLabel?: string;
+  /** Which device the page is told this is; an iPhone unless set
+   * (src/hosts/userAgents.ts). */
+  userAgent?: string;
 }
 
 /** Imperative controls the native hosts need for tab behaviour (charter

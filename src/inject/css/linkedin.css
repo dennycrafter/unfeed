@@ -17,3 +17,15 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
 [data-unfeed-hidden] {
   display: none !important;
 }
+
+/* The full messaging in the Messages tab (Denis, 21 Nov 2026) keeps closed
+   menus just past the right edge, which let the page wobble sideways. */
+html {
+  overflow-x: clip;
+}
+
+/* The desktop footer links (About, Accessibility, Help) under the chats. */
+footer:has(a[href*="about.linkedin.com"]),
+footer:has(a[href*="/legal/"]) {
+  display: none !important;
+}

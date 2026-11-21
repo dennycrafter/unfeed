@@ -21,10 +21,10 @@ import { recordBounce } from '../state/bounceLog';
 import { recordSpeed } from '../state/perfLog';
 import { colors } from '../theme/tokens';
 import { loadDecision } from './loadDecision';
+import { IPHONE_USER_AGENT } from './userAgents';
 import type { WebViewHostApi, WebViewHostProps } from './types';
 
-export const IPHONE_USER_AGENT =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+export { IPHONE_USER_AGENT } from './userAgents';
 
 function percentWidth(fraction: number): `${number}%` {
   const clamped = Math.min(Math.max(fraction, 0), 1);
@@ -40,7 +40,20 @@ function logBounce(site: Site, url: string, result: DecideResult, target: string
 }
 
 export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function WebViewHost(
-  { site, url, context, homeUrl = null, settings, hideCounts = false, injectScript, onMessage, scrollToTopSignal = 0, style, placeholderLabel },
+  {
+    site,
+    url,
+    context,
+    homeUrl = null,
+    settings,
+    hideCounts = false,
+    injectScript,
+    onMessage,
+    scrollToTopSignal = 0,
+    style,
+    placeholderLabel,
+    userAgent = IPHONE_USER_AGENT,
+  },
   ref,
 ) {
   const webViewRef = useRef<WebView<object> | null>(null);
@@ -273,7 +286,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         testID={`webview-${site}`}
         source={{ uri: source }}
         style={styles.fill}
-        userAgent={IPHONE_USER_AGENT}
+        userAgent={userAgent}
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         domStorageEnabled

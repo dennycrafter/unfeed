@@ -51,7 +51,7 @@ jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
   const WebView = React.forwardRef(function MockWebView(
-    props: { testID?: string; source?: { uri?: string }; onMessage?: (event: unknown) => void },
+    props: { testID?: string; source?: { uri?: string }; onMessage?: (event: unknown) => void; userAgent?: string },
     ref: React.Ref<unknown>,
   ) {
     React.useImperativeHandle(ref, () => ({
@@ -65,7 +65,10 @@ jest.mock('react-native-webview', () => {
     }));
     // The loaded address rides on the hint so tests can read it.
     // onMessage rides along so tests can post page messages with fireEvent.
-    return <View testID={props.testID} accessibilityHint={props.source?.uri} onMessage={props.onMessage} />;
+    // The device identity rides on nativeID (Denis, 21 Nov 2026).
+    return (
+      <View testID={props.testID} accessibilityHint={props.source?.uri} nativeID={props.userAgent} onMessage={props.onMessage} />
+    );
   });
   return { __esModule: true, WebView, default: WebView };
 });
@@ -121,7 +124,7 @@ type GetByTestId = (id: string, options?: object) => { props: { accessibilityHin
 function tabWebView(getByTestId: GetByTestId, tab: string) {
   const site = tab.startsWith('li-') ? 'linkedin' : 'instagram';
   return within(getByTestId(tab, anyVisibility) as never).getByTestId(`webview-${site}`, anyVisibility) as unknown as {
-    props: { accessibilityHint?: string };
+    props: { accessibilityHint?: string; nativeID?: string };
   };
 }
 
@@ -247,6 +250,17 @@ test('LinkedIn tabs are Profile, Messages, Search, Post, Notifications, Profile 
   expect(getByLabelText('Messages tab').props.accessibilityState).toEqual({ selected: true });
 });
 
+test('LinkedIn Messages says it is an iPad, so LinkedIn serves full messaging with reactions; other tabs stay iPhone', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('LinkedIn'));
+  expect(tabWebView(getByTestId, 'li-tab-messages').props.nativeID).toMatch(/\(iPad;/);
+  await fireEvent.press(getByLabelText('Notifications tab'));
+  expect(tabWebView(getByTestId, 'li-tab-notifications').props.nativeID).toMatch(/\(iPhone;/);
+  await fireEvent.press(getByLabelText('Instagram'));
+  expect(tabWebView(getByTestId, 'ig-tab-dms').props.nativeID).toMatch(/\(iPhone;/);
+});
+
 test('each LinkedIn tab has its own page and keeps it', async () => {
   await hydrateSettings();
   const { getByLabelText, getByTestId } = await render(<Shell />);
@@ -350,7 +364,7 @@ test("LinkedIn's Post tab opens LinkedIn's own composer over the tab, then the t
   await fireEvent.press(getByLabelText('LinkedIn'));
   await fireEvent.press(getByLabelText('Post tab'));
   const composer = within(getByTestId('li-composer') as never).getByTestId('webview-linkedin') as unknown as {
-    props: { accessibilityHint?: string };
+    props: { accessibilityHint?: string; nativeID?: string };
   };
   expect(composer.props.accessibilityHint).toBe('https://www.linkedin.com/feed/?shareActive=true');
   // Post is an action: Messages stays the active tab.
