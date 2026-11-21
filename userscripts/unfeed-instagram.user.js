@@ -623,11 +623,11 @@ a[href$="/following/"] {
   }
   function installRouteHooks(win, onRoute, onMove) {
     var _a;
-    const history = (_a = win.history) != null ? _a : {};
+    const history2 = (_a = win.history) != null ? _a : {};
     const wrap = (name) => {
-      const original = history[name];
+      const original = history2[name];
       if (typeof original !== "function") return;
-      history[name] = function(...args) {
+      history2[name] = function(...args) {
         const result = original.apply(this, args);
         const href = currentHref(win);
         if (name === "pushState") onMove == null ? void 0 : onMove(href);
@@ -1085,8 +1085,43 @@ a[href$="/following/"] {
       else post({ type: "ig-create-missing" });
     };
   }
+  var EXTRA_BACK_MS = 1e3;
+  function installBackGuard(post) {
+    if (typeof history === "undefined" || typeof window.addEventListener !== "function") return;
+    let lastPop = -Infinity;
+    let lastTap = -Infinity;
+    window.addEventListener("popstate", () => {
+      lastPop = Date.now();
+    }, true);
+    for (const type of ["pointerdown", "touchstart", "mousedown", "keydown"]) {
+      document.addEventListener(type, (event) => {
+        if (event.isTrusted) lastTap = Date.now();
+      }, true);
+    }
+    const isExtraBack = () => {
+      const now = Date.now();
+      return now - lastPop < EXTRA_BACK_MS && lastTap < lastPop;
+    };
+    const originalBack = history.back;
+    const originalGo = history.go;
+    history.back = function back() {
+      if (isExtraBack()) {
+        post({ type: "bounce", url: location.href, rule: "ig-extra-back" });
+        return;
+      }
+      originalBack.call(this);
+    };
+    history.go = function go(delta) {
+      if (typeof delta === "number" && delta < 0 && isExtraBack()) {
+        post({ type: "bounce", url: location.href, rule: "ig-extra-back" });
+        return;
+      }
+      originalGo.call(this, delta);
+    };
+  }
   installCreateHook();
   installVideoSound();
+  installBackGuard(createPoster("instagram"));
   setupInject("instagram", {
     sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, hideRelatedPosts, keepVideosInline],
     unread: true,
