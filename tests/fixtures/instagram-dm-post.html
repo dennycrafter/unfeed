@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- Instagram DM thread with a shared post (Denis, 21 Nov 2026). Mimics the
+     live site, checked on 21 Nov 2026: opening the post pushes /p/<code>/,
+     and when Back leaves the post the viewer calls history.back() once more
+     by itself, which skipped the thread. Class names are fake hashes. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Instagram</title>
+  </head>
+  <body>
+    <main class="x1n2onr6 xh8yej3">
+      <a id="back-arrow" class="x9f619" href="#" role="button" aria-label="Back">Back</a>
+      <p class="x1lliihq">Yeah bro everybody there</p>
+      <a id="shared-post" class="x1i10hfl" href="/p/abc123/">Shared post</a>
+    </main>
+    <script>
+      let viewerOpen = false;
+      document.getElementById('shared-post').addEventListener('click', (event) => {
+        event.preventDefault();
+        history.pushState({ viewer: true }, '', '/p/abc123/');
+        viewerOpen = true;
+      });
+      document.getElementById('back-arrow').addEventListener('click', (event) => {
+        event.preventDefault();
+        history.back();
+      });
+      window.addEventListener('popstate', () => {
+        if (viewerOpen && !location.pathname.startsWith('/p/')) {
+          viewerOpen = false;
+          // Instagram's viewer closing itself: one back too many.
+          history.back();
+        }
+      });
+    </script>
+  </body>
+</html>

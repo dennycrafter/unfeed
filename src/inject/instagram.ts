@@ -6,7 +6,7 @@
 import css from './css/instagram.css';
 import { parseNamedCss, ruleCss, ruleSelectors } from './cssRules';
 import { createPoster, installStyle, setupInject, type HideSweep } from './common';
-import type { InjectSettings } from './protocol';
+import type { InjectSettings, PageMessage } from './protocol';
 import { pageScopes } from './scopes';
 
 const rules = parseNamedCss(css);
@@ -422,8 +422,52 @@ function installCreateHook(): void {
   };
 }
 
+/** Back from a post opened in a DM (Denis, 21 Nov 2026). Instagram's own
+ * post viewer, when Back closes it, calls history.back() once more by
+ * itself, so one swipe went post, then chat, then straight on to the inbox.
+ * Checked on the live site on 21 Nov 2026, with and without this script.
+ * A back the page fires by itself within a second of a real one, with no tap
+ * in between, is the extra one and is ignored. A back arrow inside the page
+ * follows a tap, so it still works. */
+const EXTRA_BACK_MS = 1000;
+
+function installBackGuard(post: (message: PageMessage) => void): void {
+  if (typeof history === 'undefined' || typeof window.addEventListener !== 'function') return;
+  let lastPop = -Infinity;
+  let lastTap = -Infinity;
+  window.addEventListener('popstate', () => {
+    lastPop = Date.now();
+  }, true);
+  for (const type of ['pointerdown', 'touchstart', 'mousedown', 'keydown']) {
+    document.addEventListener(type, (event) => {
+      if (event.isTrusted) lastTap = Date.now();
+    }, true);
+  }
+  const isExtraBack = (): boolean => {
+    const now = Date.now();
+    return now - lastPop < EXTRA_BACK_MS && lastTap < lastPop;
+  };
+  const originalBack = history.back;
+  const originalGo = history.go;
+  history.back = function back(this: History): void {
+    if (isExtraBack()) {
+      post({ type: 'bounce', url: location.href, rule: 'ig-extra-back' });
+      return;
+    }
+    originalBack.call(this);
+  };
+  history.go = function go(this: History, delta?: number): void {
+    if (typeof delta === 'number' && delta < 0 && isExtraBack()) {
+      post({ type: 'bounce', url: location.href, rule: 'ig-extra-back' });
+      return;
+    }
+    originalGo.call(this, delta);
+  };
+}
+
 installCreateHook();
 installVideoSound();
+installBackGuard(createPoster('instagram'));
 
 setupInject('instagram', {
   sweeps: [applyNamedRules, detectUsername, hideOwnNav, hideAppBanners, hideRelatedPosts, keepVideosInline],

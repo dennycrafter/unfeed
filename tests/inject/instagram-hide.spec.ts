@@ -18,6 +18,7 @@ const FIXTURE_ROUTES: Record<string, string> = {
   '/direct/inbox/': 'instagram-dm.html',
   '/yourprofile/': 'instagram-profile.html',
   '/direct/t/videos/': 'instagram-videos.html',
+  '/direct/t/friend/': 'instagram-dm-post.html',
 };
 
 type PageMessageRecord = Record<string, unknown>;
@@ -373,4 +374,34 @@ test('speed log: a full load and a step inside the page each report a timing', a
   const move = (await perf()).find((message) => message.kind === 'move');
   expect(move).toMatchObject({ url: 'https://www.instagram.com/yourprofile/' });
   expect(move?.ms).toBeGreaterThanOrEqual(40);
+});
+
+test('back from a post opened in a DM lands on the DM, not the inbox', async ({ page }) => {
+  await page.route('https://www.instagram.com/direct/inbox/', (route) =>
+    route.fulfill({ body: '<!doctype html><title>Inbox</title><a id="thread" href="/direct/t/friend/">Friend</a>', contentType: 'text/html' }),
+  );
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  await page.goto('https://www.instagram.com/direct/t/friend/');
+  await page.click('#shared-post');
+  await page.waitForURL('https://www.instagram.com/p/abc123/');
+  // A swipe back is a real back with no tap inside the page.
+  await page.goBack();
+  await page.waitForTimeout(600);
+  expect(new URL(page.url()).pathname).toBe('/direct/t/friend/');
+  await waitForMessage(page, { type: 'bounce', rule: 'ig-extra-back' });
+});
+
+test('a back arrow inside the page still goes back', async ({ page }) => {
+  await page.route('https://www.instagram.com/direct/inbox/', (route) =>
+    route.fulfill({ body: '<!doctype html><title>Inbox</title>', contentType: 'text/html' }),
+  );
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  await page.goto('https://www.instagram.com/direct/t/friend/');
+  await page.click('#shared-post');
+  await page.waitForURL('https://www.instagram.com/p/abc123/');
+  await page.goBack();
+  await page.waitForTimeout(600);
+  // Now the thread's own back arrow, a real tap: it must leave the thread.
+  await page.click('#back-arrow');
+  await page.waitForURL('https://www.instagram.com/direct/inbox/');
 });
