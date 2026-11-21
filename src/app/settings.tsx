@@ -12,6 +12,7 @@ import { Header } from '@/components/Header';
 import { IconBack } from '@/components/icons';
 import { Toast } from '@/components/Toast';
 import { formatBounceTime, shortBounceUrl, useBounces, type BounceEntry } from '@/state/bounceLog';
+import { clearSpeedLog, formatSeconds, SPEED_KIND_LABELS, summarizeSpeed, useSpeedEntries, type SpeedSummary } from '@/state/perfLog';
 import { requestSiteLogout, resetSettings, updateSettings, useSettings } from '@/state/store';
 import { bars, colors, radius, space, type } from '@/theme/tokens';
 import type { Site } from '@/rules/decide';
@@ -112,6 +113,21 @@ function BounceRow({ entry }: { entry: BounceEntry }) {
   );
 }
 
+/** One line of the Speed list: the typical time for one kind of wait. */
+function SpeedRow({ row }: { row: SpeedSummary }) {
+  const app = row.site === 'instagram' ? 'Instagram' : 'LinkedIn';
+  return (
+    <View style={styles.bounceRow} accessibilityLabel={`${app} ${SPEED_KIND_LABELS[row.kind]} ${formatSeconds(row.typicalMs)}`}>
+      <Text style={styles.bounceMeta}>
+        {app}, {SPEED_KIND_LABELS[row.kind].toLowerCase()}
+      </Text>
+      <Text style={styles.bounceUrl} selectable>
+        {formatSeconds(row.typicalMs)} typical, slowest {formatSeconds(row.slowestMs)}, {row.count} {row.count === 1 ? 'time' : 'times'}
+      </Text>
+    </View>
+  );
+}
+
 function ConfirmDialog({ spec, onCancel }: { spec: ConfirmSpec; onCancel: () => void }) {
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onCancel}>
@@ -146,6 +162,7 @@ function ConfirmDialog({ spec, onCancel }: { spec: ConfirmSpec; onCancel: () => 
 export default function SettingsScreen() {
   const settings = useSettings();
   const bounces = useBounces();
+  const speed = summarizeSpeed(useSpeedEntries());
   // Drafts hold what is typed; null means show the stored value.
   const [usernameDraft, setUsernameDraft] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState<string | null>(null);
@@ -277,6 +294,33 @@ export default function SettingsScreen() {
         <Text style={styles.about}>
           About Unfeed{'\n'}Version {version}
         </Text>
+
+        <SectionLabel>Speed</SectionLabel>
+        <Text style={styles.sectionHint}>
+          How long pages take on this phone, from the last 200 waits. Clear it before trying a new update.
+        </Text>
+        <View style={styles.box} testID="speed-log">
+          {speed.length === 0 ? (
+            <Text style={styles.emptyRow}>No timings yet. Use the app for a bit, then come back.</Text>
+          ) : (
+            speed.map((row, index) => (
+              <View key={`${row.site}-${row.kind}`}>
+                {index > 0 ? <Divider /> : null}
+                <SpeedRow row={row} />
+              </View>
+            ))
+          )}
+          <Divider />
+          <View style={styles.row}>
+            <QuietButton
+              label="Clear speed log"
+              onPress={() => {
+                clearSpeedLog();
+                setToast('Speed log cleared.');
+              }}
+            />
+          </View>
+        </View>
 
         <SectionLabel>Blocked pages</SectionLabel>
         <Text style={styles.sectionHint}>The last 20 pages the app stopped or sent somewhere else, newest first.</Text>

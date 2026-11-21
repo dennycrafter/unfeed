@@ -18,6 +18,7 @@ import { buildSettingsPreamble } from '../inject/settingsPreamble';
 import { decide, toAbsoluteUrl, type DecideResult, type Site } from '../rules/decide';
 import { isReturnablePage, returnTarget } from '../rules/returnRules';
 import { recordBounce } from '../state/bounceLog';
+import { recordSpeed } from '../state/perfLog';
 import { colors } from '../theme/tokens';
 import { loadDecision } from './loadDecision';
 import type { WebViewHostApi, WebViewHostProps } from './types';
@@ -53,6 +54,10 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   const lastGoodRef = useRef<string | null>(null);
   const lastRouteRef = useRef<string | null>(null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Speed log: when this web view was made, and whether its first open has
+  // been timed yet.
+  const mountedAtRef = useRef(Date.now());
+  const openTimedRef = useRef(false);
 
   // Refs keep the latest tab context and settings visible inside callbacks
   // without resubscribing the WebView handler props on every render.
@@ -222,6 +227,13 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
         }
       } else if (message.type === 'bounce') {
         recordBounce({ at: Date.now(), site, url: message.url, rule: message.rule, to: message.to });
+      } else if (message.type === 'perf') {
+        const now = Date.now();
+        recordSpeed({ at: now, site, kind: message.kind, ms: message.ms, url: message.url });
+        if (message.kind === 'load' && !openTimedRef.current) {
+          openTimedRef.current = true;
+          recordSpeed({ at: now, site, kind: 'open', ms: now - mountedAtRef.current, url: message.url });
+        }
       }
       onMessageRef.current?.(message);
     },

@@ -354,3 +354,23 @@ test('the in-page guard reports each bounce with its rule for Blocked pages', as
     to: '/explore/search/',
   });
 });
+
+test('speed log: a full load and a step inside the page each report a timing', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  const perf = () =>
+    page.evaluate(() =>
+      ((window as unknown as { __unfeedMessages: PageMessageRecord[] }).__unfeedMessages ?? []).filter(
+        (message) => message.type === 'perf',
+      ),
+    );
+  await expect.poll(async () => (await perf()).some((message) => message.kind === 'load')).toBe(true);
+  // A step that changes the page: the address moves and new content arrives.
+  await page.evaluate(() => {
+    history.pushState({}, '', '/yourprofile/');
+    setTimeout(() => document.body.appendChild(document.createElement('div')), 50);
+  });
+  await expect.poll(async () => (await perf()).some((message) => message.kind === 'move')).toBe(true);
+  const move = (await perf()).find((message) => message.kind === 'move');
+  expect(move).toMatchObject({ url: 'https://www.instagram.com/yourprofile/' });
+  expect(move?.ms).toBeGreaterThanOrEqual(40);
+});

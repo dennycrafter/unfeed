@@ -460,7 +460,7 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       console.warn("[unfeed] in-page enforce failed", site, error);
     }
   }
-  function installRouteHooks(win, onRoute) {
+  function installRouteHooks(win, onRoute, onMove) {
     var _a;
     const history = (_a = win.history) != null ? _a : {};
     const wrap = (name) => {
@@ -468,16 +468,69 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       if (typeof original !== "function") return;
       history[name] = function(...args) {
         const result = original.apply(this, args);
-        onRoute(currentHref(win));
+        const href = currentHref(win);
+        if (name === "pushState") onMove == null ? void 0 : onMove(href);
+        onRoute(href);
         return result;
       };
     };
     wrap("pushState");
     wrap("replaceState");
     if (typeof win.addEventListener === "function") {
-      win.addEventListener("popstate", () => onRoute(currentHref(win)));
+      win.addEventListener("popstate", () => {
+        const href = currentHref(win);
+        onMove == null ? void 0 : onMove(href);
+        onRoute(href);
+      });
     }
     onRoute(currentHref(win));
+  }
+  function reportLoadSpeed(post) {
+    const send = () => {
+      try {
+        const paint = performance.getEntriesByName("first-contentful-paint")[0];
+        const nav = performance.getEntriesByType("navigation")[0];
+        const ms = paint ? paint.startTime : nav ? nav.domContentLoadedEventEnd : NaN;
+        if (Number.isFinite(ms) && ms > 0) post({ type: "perf", kind: "load", url: location.href, ms: Math.round(ms) });
+      } catch {
+      }
+    };
+    if (document.readyState === "complete") window.setTimeout(send, 0);
+    else window.addEventListener("load", () => window.setTimeout(send, 0), { once: true });
+  }
+  var SETTLE_QUIET_MS = 300;
+  var SETTLE_LIMIT_MS = 8e3;
+  function createMoveTimer(post) {
+    let run = 0;
+    return (url) => {
+      run += 1;
+      const id = run;
+      if (typeof MutationObserver === "undefined" || typeof performance === "undefined" || !document.body) return;
+      const start = performance.now();
+      let last = start;
+      const observer = new MutationObserver(() => {
+        last = performance.now();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      const check = () => {
+        if (id !== run) {
+          observer.disconnect();
+          return;
+        }
+        const now = performance.now();
+        if (now - last >= SETTLE_QUIET_MS) {
+          observer.disconnect();
+          if (last > start) post({ type: "perf", kind: "move", url, ms: Math.round(last - start) });
+          return;
+        }
+        if (now - start > SETTLE_LIMIT_MS) {
+          observer.disconnect();
+          return;
+        }
+        window.setTimeout(check, 100);
+      };
+      window.setTimeout(check, 100);
+    };
   }
   function watchDom(apply) {
     const throttled = rafThrottle(apply);
@@ -533,7 +586,8 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         if (config.enforce) enforceRoute(site, settings, url, post);
         apply();
       };
-      installRouteHooks(win, onRoute);
+      installRouteHooks(win, onRoute, createMoveTimer(post));
+      reportLoadSpeed(post);
       if (config.unread) watchUnread(post);
     } catch (error) {
       post({ type: "inject-error", message: error instanceof Error ? error.message : String(error) });
