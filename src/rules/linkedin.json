@@ -36,6 +36,13 @@
       "match": { "kind": "exact", "paths": ["/feed/"], "context": "composer" },
       "action": "allow"
     },
+    {
+      "id": "li-8-notification-post",
+      "match": { "kind": "prefix", "paths": ["/feed/"], "queryValue": "urn:li:(activity|share|ugcPost):[A-Za-z0-9_-]+" },
+      "action": "redirect",
+      "to": "/feed/update/",
+      "appendQueryValue": true
+    },
     { "id": "li-8-single-post", "match": { "kind": "prefix", "paths": ["/feed/update/", "/posts/"] }, "action": "allow" },
     { "id": "li-9-feed", "match": { "kind": "prefix", "paths": ["/feed/"] }, "action": "redirect", "to": "/messaging/" },
     { "id": "li-9-home", "match": { "kind": "home" }, "action": "redirect", "to": "/messaging/" },

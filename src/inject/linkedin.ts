@@ -3,6 +3,7 @@
 // enforcement, all driven by the shared rules table and matcher.
 
 import linkedinCss from './css/linkedin.css';
+import { decide } from '../rules/decide';
 import { setupInject, type HideSweep } from './common';
 
 const HIDDEN_ATTR = 'data-unfeed-hidden';
@@ -359,9 +360,33 @@ const detectOwnProfile: HideSweep = (_settings, post) => {
   }
 };
 
+/** Notifications (Denis, 21 Nov 2026): each one links to the feed with the
+ * post's id attached. The link is pointed straight at that single post, so a
+ * tap opens it in one step and Back returns to the list. The route rule
+ * li-8-notification-post does the same for any link this misses. */
+const POINTED_ATTR = 'data-unfeed-post-link';
+
+const pointPostLinks: HideSweep = (settings) => {
+  for (const anchor of document.querySelectorAll('a[href*="/feed"]')) {
+    const href = anchor.getAttribute('href') ?? '';
+    if (anchor.getAttribute(POINTED_ATTR) === href) continue;
+    let absolute: string;
+    try {
+      absolute = new URL(href, location.origin).href;
+    } catch {
+      continue;
+    }
+    const result = decide('linkedin', absolute, 'page', settings);
+    if (result.rule !== 'li-8-notification-post' || !result.to) continue;
+    anchor.setAttribute('href', result.to);
+    anchor.setAttribute(POINTED_ATTR, result.to);
+  }
+};
+
 setupInject('linkedin', {
   css: linkedinCss,
   sweeps: [
+    pointPostLinks,
     hideSearchPosts,
     hideProfileSuggestions,
     hideBannersAndUpsells,

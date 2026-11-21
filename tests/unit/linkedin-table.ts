@@ -91,6 +91,33 @@ export const LINKEDIN_DECIDE_TABLE: DecideRow[] = [
   { name: 'recent activity allowed', url: 'https://www.linkedin.com/in/someone/recent-activity/', expected: ALLOW },
   { name: 'recent activity posts allowed', url: 'https://www.linkedin.com/in/someone/recent-activity/all/', expected: ALLOW },
   { name: 'recent activity comments allowed', url: 'https://www.linkedin.com/in/someone/recent-activity/comments/', expected: ALLOW },
+  // Notifications link to the feed with the post id in the query; that is
+  // one post, not the feed (rule li-8-notification-post, Denis, 21 Nov 2026).
+  {
+    name: 'a notification link to a post opens the single post',
+    url: 'https://www.linkedin.com/feed/?highlightedUpdateUrn=urn%3Ali%3Aactivity%3A7390000000000000001&highlightedUpdateType=REACTION&showCommentBox=false',
+    expected: { action: 'redirect', to: '/feed/update/urn:li:activity:7390000000000000001/' },
+  },
+  {
+    name: 'a notification link with a share id opens that share',
+    url: 'https://www.linkedin.com/feed/?highlightedUpdateUrn=urn:li:share:42',
+    expected: { action: 'redirect', to: '/feed/update/urn:li:share:42/' },
+  },
+  {
+    name: 'a feed link with a ugcPost id under another key opens it',
+    url: 'https://www.linkedin.com/feed/?updateEntityUrn=urn%3Ali%3AugcPost%3A9',
+    expected: { action: 'redirect', to: '/feed/update/urn:li:ugcPost:9/' },
+  },
+  {
+    name: 'a feed link with a broken post id is still the feed',
+    url: 'https://www.linkedin.com/feed/?highlightedUpdateUrn=urn%3Ali%3Aactivity%3A1%2F..%2Fx',
+    expected: toMessaging,
+  },
+  {
+    name: 'a feed link with a non post urn is still the feed',
+    url: 'https://www.linkedin.com/feed/?highlightedUpdateUrn=urn%3Ali%3Amember%3A5',
+    expected: toMessaging,
+  },
   // The feed (rule li-9-feed)
   { name: 'the feed root redirects to Messages', url: 'https://www.linkedin.com/feed/', expected: toMessaging },
   { name: 'the feed without a trailing slash redirects', url: 'https://www.linkedin.com/feed', expected: toMessaging },

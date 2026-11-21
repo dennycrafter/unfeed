@@ -286,3 +286,27 @@ test('own bars: a pinned full screen shell is the page, not a bar, and stays', a
   await expect(page.getByText('Lunch on Friday?')).toBeVisible();
   await expect(page.locator('div.shell')).toBeVisible();
 });
+
+test('notifications: a notification opens its single post, and Back returns to the list', async ({ page }) => {
+  await routeFixture(page, 'linkedin-notifications.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/notifications/');
+  // The links show and point straight at the post; a plain feed link stays hidden.
+  await expect(page.locator('#liked')).toBeVisible();
+  await expect(page.locator('#commented')).toBeVisible();
+  await expect(page.locator('#plainfeed')).toBeHidden();
+  await expect(page.locator('#liked')).toHaveAttribute('href', '/feed/update/urn:li:activity:7390000000000000001/');
+  await expect(page.locator('#commented')).toHaveAttribute('href', '/feed/update/urn:li:ugcPost:55/');
+  await page.locator('#liked').click();
+  await page.waitForURL('https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000001/');
+  await page.goBack();
+  await page.waitForURL('https://www.linkedin.com/notifications/');
+});
+
+test('notifications: a feed address with a post id that slips through is sent to the post, not to Messages', async ({ page }) => {
+  await routeFixture(page, 'linkedin-notifications.html');
+  await prepare(page);
+  await page.goto('https://www.linkedin.com/notifications/');
+  await page.evaluate(() => history.pushState(null, '', '/feed/?highlightedUpdateUrn=urn%3Ali%3Ashare%3A9'));
+  await page.waitForURL('https://www.linkedin.com/feed/update/urn:li:share:9/');
+});
