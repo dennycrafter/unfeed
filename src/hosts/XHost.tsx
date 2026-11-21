@@ -23,7 +23,8 @@ import { colors } from '../theme/tokens';
 import type { WebViewHostApi } from './types';
 import { WebViewHost } from './WebViewHost';
 
-export const X_MESSAGES_URL = 'https://x.com/messages';
+/** X's DMs; x.com/messages forwards here (checked 21 Nov 2026). */
+export const X_MESSAGES_URL = 'https://x.com/i/chat';
 export const X_NOTIFICATIONS_URL = 'https://x.com/notifications';
 export const X_COMPOSE_URL = 'https://x.com/compose/post';
 /** X's sign out page; it asks to confirm with its own button. */

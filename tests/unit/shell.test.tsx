@@ -523,7 +523,7 @@ test('X loads only when first opened, on DMs, with Search, Post, DMs, Notificati
   const { getAllByRole, getByLabelText, getByTestId, queryByTestId } = await render(<Shell />);
   expect(queryByTestId('x-tab-messages', anyVisibility)).toBeNull();
   await fireEvent.press(getByLabelText('X'));
-  expect(tabWebView(getByTestId, 'x-tab-messages').props.accessibilityHint).toBe('https://x.com/messages');
+  expect(tabWebView(getByTestId, 'x-tab-messages').props.accessibilityHint).toBe('https://x.com/i/chat');
   const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
   expect(labels).toEqual(['Instagram', 'LinkedIn', 'X', 'Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
   await fireEvent.press(getByLabelText('Notifications tab'));

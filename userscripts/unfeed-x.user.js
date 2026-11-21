@@ -47,6 +47,19 @@ aside[aria-label="Who to follow"],
 [data-unfeed-hidden] {
   display: none !important;
 }
+
+/* @unfeed-rule x-home-timeline -- the home timeline itself, wherever X draws it (checked 21 Nov 2026) */
+[aria-label="Timeline: Your Home Timeline"],
+[aria-label^="Timeline: Your Home"] {
+  display: none !important;
+}
+
+/* @unfeed-rule x-compose-backdrop -- while the composer is open X draws the home feed behind it; that page goes blank (the composer sits in its own layer) */
+html[data-unfeed-compose] [data-testid="primaryColumn"],
+html[data-unfeed-compose] [data-testid="sidebarColumn"],
+html[data-unfeed-compose] header[role="banner"] {
+  visibility: hidden !important;
+}
 `;
 
   // src/inject/cssRules.ts
@@ -886,17 +899,41 @@ aside[aria-label="Who to follow"],
   };
   var DISCOVER_HEADING = /^(discover more|more posts|you might like)\b/i;
   var hideDiscoverMore = () => {
-    var _a;
+    var _a, _b, _c;
     if (!/^\/[^/]+\/status\/\d+/.test(location.pathname)) return;
     let hiding = false;
+    let cutAt = null;
+    let list = null;
     for (const cell of document.querySelectorAll('[data-testid="cellInnerDiv"]')) {
       if (!hiding) {
         const heading = cell.querySelector('h2, [role="heading"]');
         const text = ((_a = heading == null ? void 0 : heading.textContent) != null ? _a : "").trim();
-        if (text && DISCOVER_HEADING.test(text)) hiding = true;
+        if (text && DISCOVER_HEADING.test(text)) {
+          hiding = true;
+          const top = (_c = /translateY\((\d+(?:\.\d+)?)px\)/.exec((_b = cell.getAttribute("style")) != null ? _b : "")) == null ? void 0 : _c[1];
+          if (top !== void 0 && cell.parentElement instanceof HTMLElement) {
+            cutAt = Number(top);
+            list = cell.parentElement;
+          }
+        }
       }
       if (hiding) hide(cell);
     }
+    if (list && cutAt !== null) {
+      const height = `${cutAt}px`;
+      if (list.style.getPropertyValue("height") !== height || list.style.getPropertyPriority("min-height") !== "important") {
+        list.style.setProperty("min-height", height, "important");
+        list.style.setProperty("height", height, "important");
+        list.style.setProperty("overflow", "hidden", "important");
+      }
+    }
+  };
+  var COMPOSE_ATTR = "data-unfeed-compose";
+  var markComposer = () => {
+    const composing = location.pathname.toLowerCase().startsWith("/compose/");
+    const root = document.documentElement;
+    if (composing && !root.hasAttribute(COMPOSE_ATTR)) root.setAttribute(COMPOSE_ATTR, "");
+    if (!composing && root.hasAttribute(COMPOSE_ATTR)) root.removeAttribute(COMPOSE_ATTR);
   };
   var hideOwnBars = () => {
     var _a;
@@ -922,7 +959,7 @@ aside[aria-label="Who to follow"],
     }
   };
   setupInject("x", {
-    sweeps: [applyNamedRules, detectUsername, hideOwnBars, hideDiscoverMore, hideAppBanners],
+    sweeps: [applyNamedRules, markComposer, detectUsername, hideOwnBars, hideDiscoverMore, hideAppBanners],
     unread: true,
     enforce: true
   });

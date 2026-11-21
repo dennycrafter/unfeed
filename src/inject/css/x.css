@@ -28,3 +28,16 @@ aside[aria-label="Who to follow"],
 [data-unfeed-hidden] {
   display: none !important;
 }
+
+/* @unfeed-rule x-home-timeline -- the home timeline itself, wherever X draws it (checked 21 Nov 2026) */
+[aria-label="Timeline: Your Home Timeline"],
+[aria-label^="Timeline: Your Home"] {
+  display: none !important;
+}
+
+/* @unfeed-rule x-compose-backdrop -- while the composer is open X draws the home feed behind it; that page goes blank (the composer sits in its own layer) */
+html[data-unfeed-compose] [data-testid="primaryColumn"],
+html[data-unfeed-compose] [data-testid="sidebarColumn"],
+html[data-unfeed-compose] header[role="banner"] {
+  visibility: hidden !important;
+}

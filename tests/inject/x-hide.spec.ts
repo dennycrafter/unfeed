@@ -49,10 +49,21 @@ test('single post: the post and replies stay, Discover more and below go', async
   await expect(page.locator('#discover')).toBeHidden();
   await expect(page.locator('#sourced')).toBeHidden();
   await expect(page.locator('#recommended')).toBeHidden();
+  // The list ends where Discover more starts: no empty space to scroll into.
+  await expect.poll(() => page.evaluate(() => document.getElementById('list')?.getBoundingClientRect().height)).toBe(600);
 });
 
 test('a move to the home timeline goes back to the last page instead', async ({ page }) => {
   await open(page, '/someone/status/123', 'x-status.html');
   await page.evaluate(() => history.pushState(null, '', '/home'));
   await page.waitForURL('https://x.com/someone/status/123');
+});
+
+test('the composer: the home feed X draws behind it is blank, and it comes back after', async ({ page }) => {
+  await open(page, '/compose/post', 'x-compose.html');
+  await expect(page.locator('#composer')).toBeVisible();
+  await expect(page.locator('#feed')).toBeHidden();
+  await expect(page.locator('#column')).toBeHidden();
+  await page.evaluate(() => history.pushState(null, '', '/notifications'));
+  await expect(page.locator('#column')).toBeVisible();
 });

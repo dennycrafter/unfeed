@@ -41,14 +41,46 @@ const DISCOVER_HEADING = /^(discover more|more posts|you might like)\b/i;
 const hideDiscoverMore: HideSweep = () => {
   if (!/^\/[^/]+\/status\/\d+/.test(location.pathname)) return;
   let hiding = false;
+  let cutAt: number | null = null;
+  let list: HTMLElement | null = null;
   for (const cell of document.querySelectorAll('[data-testid="cellInnerDiv"]')) {
     if (!hiding) {
       const heading = cell.querySelector('h2, [role="heading"]');
       const text = (heading?.textContent ?? '').trim();
-      if (text && DISCOVER_HEADING.test(text)) hiding = true;
+      if (text && DISCOVER_HEADING.test(text)) {
+        hiding = true;
+        // X places each post at a fixed height in a list as tall as all of
+        // them; the list ends where Discover more starts, so no empty space
+        // is left to scroll and no more recommendations load.
+        const top = /translateY\((\d+(?:\.\d+)?)px\)/.exec(cell.getAttribute('style') ?? '')?.[1];
+        if (top !== undefined && cell.parentElement instanceof HTMLElement) {
+          cutAt = Number(top);
+          list = cell.parentElement;
+        }
+      }
     }
     if (hiding) hide(cell);
   }
+  if (list && cutAt !== null) {
+    const height = `${cutAt}px`;
+    if (list.style.getPropertyValue('height') !== height || list.style.getPropertyPriority('min-height') !== 'important') {
+      list.style.setProperty('min-height', height, 'important');
+      list.style.setProperty('height', height, 'important');
+      list.style.setProperty('overflow', 'hidden', 'important');
+    }
+  }
+};
+
+/** The composer (Denis, 21 Nov 2026): opened as its own page, X draws the
+ * home feed behind it. While the address is the composer's, the page
+ * behind goes blank (rule x-compose-backdrop). */
+const COMPOSE_ATTR = 'data-unfeed-compose';
+
+const markComposer: HideSweep = () => {
+  const composing = location.pathname.toLowerCase().startsWith('/compose/');
+  const root = document.documentElement;
+  if (composing && !root.hasAttribute(COMPOSE_ATTR)) root.setAttribute(COMPOSE_ATTR, '');
+  if (!composing && root.hasAttribute(COMPOSE_ATTR)) root.removeAttribute(COMPOSE_ATTR);
 };
 
 /** X's own bottom tab bar, replaced by the app's. A page's own header with
@@ -79,7 +111,7 @@ const hideAppBanners: HideSweep = () => {
 };
 
 setupInject('x', {
-  sweeps: [applyNamedRules, detectUsername, hideOwnBars, hideDiscoverMore, hideAppBanners],
+  sweeps: [applyNamedRules, markComposer, detectUsername, hideOwnBars, hideDiscoverMore, hideAppBanners],
   unread: true,
   enforce: true,
 });
