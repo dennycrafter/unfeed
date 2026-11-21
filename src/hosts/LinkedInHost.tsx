@@ -22,6 +22,7 @@ import { tickHaptic } from '../state/haptics';
 import { loadRecentSearches, nextRecentSearches, saveRecentSearches } from '../state/recentSearches';
 import { colors } from '../theme/tokens';
 import type { WebViewHostApi } from './types';
+import { IPAD_USER_AGENT } from './userAgents';
 import { WebViewHost } from './WebViewHost';
 
 export const LINKEDIN_MESSENGER_URL = 'https://www.linkedin.com/messaging/';
@@ -349,6 +350,8 @@ export function LinkedInHost({
                 injectScript={LINKEDIN_INJECT_SCRIPT}
                 onMessage={handleMessage}
                 placeholderLabel={`LinkedIn ${tab} (web preview)`}
+                // Full messaging with reactions and replies (Denis, 21 Nov 2026).
+                userAgent={tab === 'messages' ? IPAD_USER_AGENT : undefined}
               />
             </View>
           );

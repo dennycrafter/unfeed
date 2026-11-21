@@ -191,6 +191,7 @@ a[href$="/following/"] {
     allowedHostSuffixes: ["licdn.com"],
     allowedHostPaths: [],
     alwaysAllowHosts: ["lnkd.in"],
+    pathAliases: ["/mwlite/"],
     rules: [
       {
         id: "li-1-auth",
@@ -322,6 +323,10 @@ a[href$="/following/"] {
     }
     const alwaysAllowHosts = file.alwaysAllowHosts === void 0 ? [] : file.alwaysAllowHosts;
     if (!isStringArray(alwaysAllowHosts)) fail(site, "alwaysAllowHosts must be a list of strings");
+    const pathAliases = file.pathAliases === void 0 ? [] : file.pathAliases;
+    if (!isStringArray(pathAliases) || pathAliases.some((alias) => !/^\/[^/]+\/$/.test(alias))) {
+      fail(site, "pathAliases must be one segment prefixes like /mwlite/");
+    }
     if (!Array.isArray(file.rules) || file.rules.length === 0) fail(site, "rules must be a non-empty list");
     const rules2 = file.rules.map((entry, index) => {
       if (typeof entry !== "object" || entry === null) fail(site, `rule ${index} must be an object`);
@@ -399,6 +404,7 @@ a[href$="/following/"] {
       allowedHostSuffixes: allowedHostSuffixes.map((suffix) => suffix.toLowerCase()),
       allowedHostPaths,
       alwaysAllowHosts: alwaysAllowHosts.map((host) => host.toLowerCase()),
+      pathAliases: pathAliases.map((alias) => alias.toLowerCase()),
       rules: rules2
     };
   }
@@ -440,7 +446,9 @@ a[href$="/following/"] {
       return { action: "allow", rule: "non-http-scheme" };
     }
     const host = url.hostname.toLowerCase();
-    const path = normalizePath(url.pathname);
+    let path = normalizePath(url.pathname);
+    const alias = rules2.pathAliases.find((prefix) => path.startsWith(prefix));
+    if (alias) path = path.slice(alias.length - 1);
     if (!rules2.hosts.includes(host)) {
       if (rules2.allowedHostSuffixes.some((suffix) => hostMatches(host, suffix))) {
         return { action: "allow", rule: "asset-host" };

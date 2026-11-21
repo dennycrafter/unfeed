@@ -4,6 +4,7 @@
   "allowedHostSuffixes": ["licdn.com"],
   "allowedHostPaths": [],
   "alwaysAllowHosts": ["lnkd.in"],
+  "pathAliases": ["/mwlite/"],
   "rules": [
     {
       "id": "li-1-auth",
