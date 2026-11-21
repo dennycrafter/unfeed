@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { allowSoundInSilentMode } from '@/state/audio';
 import { hydrateBounces } from '@/state/bounceLog';
+import { hydrateSpeedLog } from '@/state/perfLog';
 import { hydrateSettings } from '@/state/store';
 import { colors } from '@/theme/tokens';
 
@@ -16,6 +17,8 @@ export default function RootLayout() {
     void hydrateSettings();
     // The Blocked pages list in Settings (Denis, 25 Oct 2026).
     void hydrateBounces();
+    // The Speed list in Settings (Denis, 21 Nov 2026).
+    void hydrateSpeedLog();
     // Videos in the web views play with sound even on silent (Denis, 23 Oct).
     void allowSoundInSilentMode();
   }, []);

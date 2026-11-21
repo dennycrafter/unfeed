@@ -13,7 +13,13 @@ export type PageMessage =
   /** The page sent itself somewhere else (in-page guard, composer closed),
    * for the Blocked pages list in Settings. */
   | { type: 'bounce'; url: string; rule: string; to?: string }
-  | { type: 'hide-stats'; matched: Record<string, number> };
+  | { type: 'hide-stats'; matched: Record<string, number> }
+  /** Speed log (Denis, 21 Nov 2026): load is a full page load until the
+   * first thing shows, move is a step inside the page until it stops
+   * changing. Both in milliseconds. */
+  | { type: 'perf'; kind: PerfKind; url: string; ms: number };
+
+export type PerfKind = 'load' | 'move';
 
 export function isPageMessage(value: unknown): value is PageMessage {
   if (typeof value !== 'object' || value === null) return false;
@@ -38,6 +44,15 @@ export function isPageMessage(value: unknown): value is PageMessage {
       typeof record.matched === 'object' &&
       record.matched !== null &&
       Object.values(record.matched).every((count) => typeof count === 'number')
+    );
+  }
+  if (record.type === 'perf') {
+    return (
+      (record.kind === 'load' || record.kind === 'move') &&
+      typeof record.url === 'string' &&
+      typeof record.ms === 'number' &&
+      Number.isFinite(record.ms) &&
+      record.ms >= 0
     );
   }
   return false;
