@@ -34,6 +34,9 @@ interface RuleMatch {
   /** Query keys that must all be present, for example LinkedIn's
    * shareActive composer on /feed/. */
   query?: string[];
+  /** A pattern some query value must match in full, for example a post id
+   * that a LinkedIn notification carries on a /feed/ link. */
+  queryValue?: string;
 }
 
 interface RouteRule {
@@ -47,6 +50,10 @@ interface RouteRule {
   /** singleSegmentPrefix rows only: the segment after the matched prefix is
    * added to the target, for example /reels/abc/ to the single reel /reel/abc/. */
   keepRest?: boolean;
+  /** queryValue rows only: the matching query value is added to the target,
+   * for example /feed/?highlightedUpdateUrn=urn:li:activity:1 to the single
+   * post /feed/update/urn:li:activity:1/ (Denis, 21 Nov 2026). */
+  appendQueryValue?: boolean;
 }
 
 interface HostPathRule {
@@ -90,9 +97,19 @@ function hostMatches(host: string, pattern: string): boolean {
   return host === pattern || host.endsWith(`.${pattern}`);
 }
 
+/** The first query value that matches the pattern in full, if any. */
+function matchingQueryValue(url: URL, pattern: string): string | null {
+  const re = new RegExp(`^(?:${pattern})$`);
+  for (const value of url.searchParams.values()) {
+    if (re.test(value)) return value;
+  }
+  return null;
+}
+
 function ruleMatches(rule: RouteRule, path: string, context: string, url: URL): boolean {
   const query = rule.match.query;
   if (query && !query.every((key) => url.searchParams.has(key))) return false;
+  if (rule.match.queryValue !== undefined && matchingQueryValue(url, rule.match.queryValue) === null) return false;
   // A context limited row only answers for that tab or session (Instagram's
   // stories home, LinkedIn's open post composer).
   if (rule.match.kind !== 'home' && rule.match.context !== undefined && context !== rule.match.context) return false;
@@ -161,6 +178,14 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
       fail(site, `rule ${id} context must be a string`);
     }
     if (match.query !== undefined && !isStringArray(match.query)) fail(site, `rule ${id} query must be strings`);
+    if (match.queryValue !== undefined) {
+      if (typeof match.queryValue !== 'string') fail(site, `rule ${id} queryValue must be a string`);
+      try {
+        new RegExp(match.queryValue);
+      } catch {
+        fail(site, `rule ${id} queryValue is not a valid pattern`);
+      }
+    }
     if (typeof record.action !== 'string' || !RULE_ACTIONS.includes(record.action as RuleAction)) {
       fail(site, `rule ${id} has unknown action "${String(record.action)}"`);
     }
@@ -183,6 +208,12 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
         fail(site, `rule ${id} keepRest needs a singleSegmentPrefix redirect whose to ends with /`);
       }
     }
+    if (record.appendQueryValue !== undefined) {
+      if (record.appendQueryValue !== true) fail(site, `rule ${id} appendQueryValue must be true when present`);
+      if (match.queryValue === undefined || action !== 'redirect' || !String(record.to).endsWith('/')) {
+        fail(site, `rule ${id} appendQueryValue needs a queryValue redirect whose to ends with /`);
+      }
+    }
     return {
       id,
       match: {
@@ -191,11 +222,13 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
         prefixes: match.prefixes,
         context: match.context,
         query: match.query,
+        queryValue: match.queryValue as string | undefined,
       },
       action,
       to,
       keepQuery,
       keepRest: record.keepRest === true ? true : undefined,
+      appendQueryValue: record.appendQueryValue === true ? true : undefined,
     };
   });
   if (!rules.some((rule) => rule.match.kind === 'any')) fail(site, 'rules must include an any fallback');
@@ -230,6 +263,10 @@ function redirectWithQuery(rule: RouteRule, url: URL, path: string): DecideResul
     // from the address as typed, not the lowercased match path.
     const typed = url.pathname.replace(/\/{2,}/g, '/');
     if (prefix) to += (typed.endsWith('/') ? typed : `${typed}/`).slice(prefix.length);
+  }
+  if (rule.appendQueryValue && rule.match.queryValue !== undefined) {
+    const value = matchingQueryValue(url, rule.match.queryValue);
+    if (value) to += `${value}/`;
   }
   if (!rule.keepQuery || rule.keepQuery.length === 0) {
     return { action: 'redirect', to, rule: rule.id };

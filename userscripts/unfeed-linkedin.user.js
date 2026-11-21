@@ -20,9 +20,11 @@
 
 /* LinkedIn's own top and bottom bars stay (Denis, 15 Oct 2026). Only the
    ways into the feed go: the Home item and any other link to /feed/. Shared
-   posts (/feed/update/) and the post composer (shareActive) are not feed. */
-a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]),
-a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]) {
+   posts (/feed/update/) and the post composer (shareActive) are not feed,
+   and neither is a feed link carrying one post's id, which is how
+   notifications point at a post (Denis, 21 Nov 2026). */
+a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]):not([href*="urn:li:"]):not([href*="urn%3Ali%3A"]),
+a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]):not([href*="urn:li:"]):not([href*="urn%3Ali%3A"]) {
   display: none !important;
 }
 
@@ -105,6 +107,13 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         match: { kind: "exact", paths: ["/feed/"], context: "composer" },
         action: "allow"
       },
+      {
+        id: "li-8-notification-post",
+        match: { kind: "prefix", paths: ["/feed/"], queryValue: "urn:li:(activity|share|ugcPost):[A-Za-z0-9_-]+" },
+        action: "redirect",
+        to: "/feed/update/",
+        appendQueryValue: true
+      },
       { id: "li-8-single-post", match: { kind: "prefix", paths: ["/feed/update/", "/posts/"] }, action: "allow" },
       { id: "li-9-feed", match: { kind: "prefix", paths: ["/feed/"] }, action: "redirect", to: "/messaging/" },
       { id: "li-9-home", match: { kind: "home" }, action: "redirect", to: "/messaging/" },
@@ -142,10 +151,18 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
   function hostMatches(host, pattern) {
     return host === pattern || host.endsWith(`.${pattern}`);
   }
+  function matchingQueryValue(url, pattern) {
+    const re = new RegExp(`^(?:${pattern})$`);
+    for (const value of url.searchParams.values()) {
+      if (re.test(value)) return value;
+    }
+    return null;
+  }
   function ruleMatches(rule, path, context, url) {
     var _a, _b, _c;
     const query = rule.match.query;
     if (query && !query.every((key) => url.searchParams.has(key))) return false;
+    if (rule.match.queryValue !== void 0 && matchingQueryValue(url, rule.match.queryValue) === null) return false;
     if (rule.match.kind !== "home" && rule.match.context !== void 0 && context !== rule.match.context) return false;
     switch (rule.match.kind) {
       case "prefix":
@@ -206,6 +223,14 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
         fail(site, `rule ${id} context must be a string`);
       }
       if (match.query !== void 0 && !isStringArray(match.query)) fail(site, `rule ${id} query must be strings`);
+      if (match.queryValue !== void 0) {
+        if (typeof match.queryValue !== "string") fail(site, `rule ${id} queryValue must be a string`);
+        try {
+          new RegExp(match.queryValue);
+        } catch {
+          fail(site, `rule ${id} queryValue is not a valid pattern`);
+        }
+      }
       if (typeof record.action !== "string" || !RULE_ACTIONS.includes(record.action)) {
         fail(site, `rule ${id} has unknown action "${String(record.action)}"`);
       }
@@ -228,6 +253,12 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
           fail(site, `rule ${id} keepRest needs a singleSegmentPrefix redirect whose to ends with /`);
         }
       }
+      if (record.appendQueryValue !== void 0) {
+        if (record.appendQueryValue !== true) fail(site, `rule ${id} appendQueryValue must be true when present`);
+        if (match.queryValue === void 0 || action !== "redirect" || !String(record.to).endsWith("/")) {
+          fail(site, `rule ${id} appendQueryValue needs a queryValue redirect whose to ends with /`);
+        }
+      }
       return {
         id,
         match: {
@@ -235,12 +266,14 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
           paths: match.paths,
           prefixes: match.prefixes,
           context: match.context,
-          query: match.query
+          query: match.query,
+          queryValue: match.queryValue
         },
         action,
         to,
         keepQuery,
-        keepRest: record.keepRest === true ? true : void 0
+        keepRest: record.keepRest === true ? true : void 0,
+        appendQueryValue: record.appendQueryValue === true ? true : void 0
       };
     });
     if (!rules.some((rule) => rule.match.kind === "any")) fail(site, "rules must include an any fallback");
@@ -260,6 +293,10 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       const prefix = ((_b = rule.match.prefixes) != null ? _b : []).find((candidate) => path.startsWith(candidate));
       const typed = url.pathname.replace(/\/{2,}/g, "/");
       if (prefix) to += (typed.endsWith("/") ? typed : `${typed}/`).slice(prefix.length);
+    }
+    if (rule.appendQueryValue && rule.match.queryValue !== void 0) {
+      const value = matchingQueryValue(url, rule.match.queryValue);
+      if (value) to += `${value}/`;
     }
     if (!rule.keepQuery || rule.keepQuery.length === 0) {
       return { action: "redirect", to, rule: rule.id };
@@ -865,9 +902,28 @@ a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActiv
       return;
     }
   };
+  var POINTED_ATTR = "data-unfeed-post-link";
+  var pointPostLinks = (settings) => {
+    var _a;
+    for (const anchor of document.querySelectorAll('a[href*="/feed"]')) {
+      const href = (_a = anchor.getAttribute("href")) != null ? _a : "";
+      if (anchor.getAttribute(POINTED_ATTR) === href) continue;
+      let absolute;
+      try {
+        absolute = new URL(href, location.origin).href;
+      } catch {
+        continue;
+      }
+      const result = decide("linkedin", absolute, "page", settings);
+      if (result.rule !== "li-8-notification-post" || !result.to) continue;
+      anchor.setAttribute("href", result.to);
+      anchor.setAttribute(POINTED_ATTR, result.to);
+    }
+  };
   setupInject("linkedin", {
     css: linkedin_default,
     sweeps: [
+      pointPostLinks,
       hideSearchPosts,
       hideProfileSuggestions,
       hideBannersAndUpsells,

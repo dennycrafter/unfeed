@@ -5,9 +5,11 @@
 
 /* LinkedIn's own top and bottom bars stay (Denis, 15 Oct 2026). Only the
    ways into the feed go: the Home item and any other link to /feed/. Shared
-   posts (/feed/update/) and the post composer (shareActive) are not feed. */
-a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]),
-a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]) {
+   posts (/feed/update/) and the post composer (shareActive) are not feed,
+   and neither is a feed link carrying one post's id, which is how
+   notifications point at a post (Denis, 21 Nov 2026). */
+a[href^="/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]):not([href*="urn:li:"]):not([href*="urn%3Ali%3A"]),
+a[href*="linkedin.com/feed"]:not([href*="/feed/update/"]):not([href*="shareActive"]):not([href*="urn:li:"]):not([href*="urn%3Ali%3A"]) {
   display: none !important;
 }
 
