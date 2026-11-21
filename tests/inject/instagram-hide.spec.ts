@@ -405,3 +405,31 @@ test('a back arrow inside the page still goes back', async ({ page }) => {
   await page.click('#back-arrow');
   await page.waitForURL('https://www.instagram.com/direct/inbox/');
 });
+
+test('speed: tracking calls never reach the network, real calls do', async ({ page }) => {
+  const seen: string[] = [];
+  page.on('request', (request) => seen.push(new URL(request.url()).pathname));
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  const result = await page.evaluate(async () => {
+    const fetched = await fetch('/ajax/bz', { method: 'POST', body: 'x' });
+    const xhrStatus = await new Promise<number>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://www.instagram.com/ajax/bz');
+      xhr.addEventListener('loadend', () => resolve(xhr.status));
+      xhr.send('y');
+    });
+    const beacon = navigator.sendBeacon('/ajax/bz', 'z');
+    const real = await fetch('/api/graphql', { method: 'POST', body: 'q' });
+    return { fetched: fetched.status, xhrStatus, beacon, real: real.status, blocked: (window as unknown as { __UNFEED_JUNK__?: number }).__UNFEED_JUNK__ };
+  });
+  expect(result).toMatchObject({ fetched: 204, xhrStatus: 204, beacon: true, real: 200, blocked: 3 });
+  expect(seen).not.toContain('/ajax/bz');
+  expect(seen).toContain('/api/graphql');
+});
+
+test('speed: the dark loading style is gone once the page is read, so the site keeps its colours', async ({ page }) => {
+  await openFixture(page, '/direct/inbox/', { context: 'dms' });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(50);
+  expect(await page.evaluate(() => document.getElementById('unfeed-loading-canvas'))).toBeNull();
+});

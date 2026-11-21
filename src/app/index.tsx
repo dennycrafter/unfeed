@@ -29,6 +29,13 @@ export type InstagramTab = 'search' | 'dms' | 'activity' | 'profile';
 const DEFAULT_TAB: InstagramTab = 'dms';
 const TAB_ORDER: InstagramTab[] = ['search', 'dms', 'activity', 'profile'];
 
+/** Speed (Denis, 21 Nov 2026): these tabs load in the background soon after
+ * launch, one after another, so tapping them is instant. Search waits for a
+ * tap, to spare the phone's memory. */
+export const PRELOAD_TABS: InstagramTab[] = ['activity', 'profile'];
+export const PRELOAD_FIRST_MS = 2500;
+export const PRELOAD_GAP_MS = 2500;
+
 /** Until the username is known, the Profile tab opens the edit profile page,
  * then moves to the real profile once the page reveals the username. */
 const PROFILE_FALLBACK_URL = 'https://www.instagram.com/accounts/edit/';
@@ -100,6 +107,11 @@ export default function Index() {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkedInOpen, setLinkedInOpen] = useState<{ url: string; id: number } | null>(null);
   const hostRefs = useRef<HostRefs>({});
+  // Tabs that have been on screen. A preloaded tab that never showed stays
+  // laid out at full size but invisible, so its page lays out for the
+  // screen; once seen, a hidden tab is simply not shown.
+  const [seen, setSeen] = useState<Partial<Record<InstagramTab, true>>>(() => ({ [DEFAULT_TAB]: true }));
+  if (!seen[activeTab]) setSeen((current) => ({ ...current, [activeTab]: true }));
   const activeTabRef = useRef(activeTab);
   useLayoutEffect(() => {
     activeTabRef.current = activeTab;
@@ -114,6 +126,19 @@ export default function Index() {
     const timer = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Background preload once the stored settings are in (the Profile tab
+  // needs the username).
+  useEffect(() => {
+    if (!hydrated) return;
+    const timers = PRELOAD_TABS.map((tab, index) =>
+      setTimeout(
+        () => setOpened((current) => (current[tab] ? current : { ...current, [tab]: startUrl(tab) })),
+        PRELOAD_FIRST_MS + index * PRELOAD_GAP_MS,
+      ),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [hydrated]);
 
   // Stored settings arrive a moment after launch: jump to the app Denis left
   // (charter section 6, lastApp). Adjusted during render, React's endorsed
@@ -337,8 +362,16 @@ export default function Index() {
             ? TAB_ORDER.map((tab) => {
                 const url = opened[tab];
                 if (!url) return null;
+                const showing = tab === activeTab;
                 return (
-                  <View key={tab} style={[styles.cover, tab !== activeTab && styles.hidden]} testID={`ig-tab-${tab}`}>
+                  <View
+                    key={tab}
+                    style={[styles.cover, !showing && (seen[tab] ? styles.hidden : styles.preloading)]}
+                    pointerEvents={showing ? 'auto' : 'none'}
+                    accessibilityElementsHidden={!showing}
+                    importantForAccessibility={showing ? 'auto' : 'no-hide-descendants'}
+                    testID={`ig-tab-${tab}`}
+                  >
                     <InstagramHost
                       ref={perTab.refs[tab]}
                       url={url}
@@ -346,6 +379,7 @@ export default function Index() {
                       context={tab}
                       settings={settings}
                       onMessage={perTab.handlers[tab]}
+                      active={showing && activeApp === 'instagram'}
                     />
                   </View>
                 );
@@ -370,6 +404,7 @@ export default function Index() {
             onOpenSettings={() => router.push('/settings')}
             openRequest={linkedInOpen}
             onMessage={handleLinkedInMessage}
+            visible={activeApp === 'linkedin'}
           />
         ) : null}
       </View>
@@ -383,4 +418,5 @@ const styles = StyleSheet.create({
   hostArea: { flex: 1 },
   cover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
   hidden: { display: 'none' },
+  preloading: { opacity: 0, zIndex: -1 },
 });

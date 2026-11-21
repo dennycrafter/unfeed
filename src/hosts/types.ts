@@ -39,6 +39,9 @@ export interface WebViewHostProps {
   /** Which device the page is told this is; an iPhone unless set
    * (src/hosts/userAgents.ts). */
   userAgent?: string;
+  /** Whether this page is the one showing, for the "Tab ready after tap"
+   * timing (Denis, 21 Nov 2026). Defaults to showing. */
+  active?: boolean;
 }
 
 /** Imperative controls the native hosts need for tab behaviour (charter

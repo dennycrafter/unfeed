@@ -8,10 +8,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
 import type { Site } from '../rules/decide';
 
-/** open: a tab's web view made until its first page finished loading.
+/** tab: a tab tapped until its page shows (0 when it was ready already).
+ * open: a tab's web view made until its first page showed.
  * load: a full page load until the first thing showed.
  * move: a step inside the page until it stopped changing. */
-export type SpeedKind = 'open' | 'load' | 'move';
+export type SpeedKind = 'tab' | 'open' | 'load' | 'move';
 
 export interface SpeedEntry {
   at: number;
@@ -34,7 +35,7 @@ export const SPEED_LOG_KEY = 'unfeed.speed.v1';
 export const SPEED_LOG_LIMIT = 200;
 
 const SITES: Site[] = ['instagram', 'linkedin'];
-const KINDS: SpeedKind[] = ['open', 'load', 'move'];
+const KINDS: SpeedKind[] = ['tab', 'open', 'load', 'move'];
 
 let entries: SpeedEntry[] = [];
 const listeners = new Set<() => void>();
@@ -116,6 +117,7 @@ export function formatSeconds(ms: number): string {
 }
 
 export const SPEED_KIND_LABELS: Record<SpeedKind, string> = {
+  tab: 'Tab ready after tap',
   open: 'First open of a tab',
   load: 'Full page load',
   move: 'Tap inside a page',
