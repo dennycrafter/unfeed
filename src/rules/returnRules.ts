@@ -5,13 +5,30 @@
 // showed, or to its own tab's start page, and only then to the rule's target.
 // Pure and browser safe: the native host and the injected script share it.
 
-export const RETURN_RULES: ReadonlySet<string> = new Set(['ig-5-home', 'ig-8-reels', 'li-9-feed', 'li-9-home']);
+export const RETURN_RULES: ReadonlySet<string> = new Set([
+  'ig-5-home',
+  'ig-8-reels',
+  'li-9-feed',
+  'li-9-home',
+  // X (Denis, 21 Nov 2026): home and the feeds go back, never to a timeline.
+  'x-5-home',
+  'x-5-home-timeline',
+  'x-6-feeds',
+]);
 
 /** Pages that are never worth returning to: a story ends by leaving it. */
 export function isReturnablePage(url: string): boolean {
   try {
     const path = new URL(url).pathname.toLowerCase();
-    return !path.startsWith('/stories/') && path !== '/' && path !== '/feed/' && !path.startsWith('/accounts/login');
+    return (
+      !path.startsWith('/stories/') &&
+      path !== '/' &&
+      path !== '/feed/' &&
+      path !== '/home' &&
+      !path.startsWith('/accounts/login') &&
+      !path.startsWith('/compose/') &&
+      !path.startsWith('/i/flow/')
+    );
   } catch {
     return false;
   }

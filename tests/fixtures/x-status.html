@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- X single post fixture (checked on the live site, 21 Nov 2026): cells are
+     placed at fixed heights inside a list as tall as all of them, then a
+     Discover more heading and recommended posts. Fake hashed classes. -->
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Someone on X</title></head>
+  <body style="margin:0">
+    <main role="main">
+      <div data-testid="primaryColumn">
+        <div aria-label="Timeline: Conversation">
+          <div id="list" style="position: relative; min-height: 2500px;">
+            <div data-testid="cellInnerDiv" id="post" style="transform: translateY(0px); position: absolute; width: 100%;"><article data-testid="tweet">The post itself</article></div>
+            <div data-testid="cellInnerDiv" id="reply" style="transform: translateY(300px); position: absolute; width: 100%;"><article data-testid="tweet">A reply</article></div>
+            <div data-testid="cellInnerDiv" id="discover" style="transform: translateY(600px); position: absolute; width: 100%;"><div><h2 role="heading"><span>Discover more</span></h2></div></div>
+            <div data-testid="cellInnerDiv" id="sourced" style="transform: translateY(650px); position: absolute; width: 100%;"><span>Sourced from across X</span></div>
+            <div data-testid="cellInnerDiv" id="recommended" style="transform: translateY(700px); position: absolute; width: 100%;"><article data-testid="tweet">A stranger's viral post</article></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

@@ -41,7 +41,7 @@ test.describe('instagram screens at phone size', () => {
     await page.goto('/');
     await expect(page.getByRole('tab', { name: 'Stories tab' })).toHaveCount(0);
     const labels = await page.getByRole('tab').evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('aria-label')));
-    expect(labels.slice(2)).toEqual(['Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
+    expect(labels.slice(3)).toEqual(['Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
   });
 });
 

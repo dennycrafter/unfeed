@@ -1,14 +1,16 @@
 # Unfeed
 
-Instagram and LinkedIn with no feed. Unfeed opens the real mobile websites of Instagram and LinkedIn inside one app, jumps straight to your messages, and blocks the feed, reels and explore pages at the navigation level. You log in once inside the app with your normal accounts, the same as using Safari. There are no private APIs, no scraping and no automation of either service, so there is nothing that puts your accounts at risk.
+Instagram, LinkedIn and X with no feed. Unfeed opens the real mobile websites of Instagram, LinkedIn and X inside one app, jumps straight to your messages, and blocks the feed, reels and explore pages at the navigation level. You log in once inside the app with your normal accounts, the same as using Safari. There are no private APIs, no scraping and no automation of either service, so there is nothing that puts your accounts at risk.
 
 ## What it is
 
 One app, two services, no feeds:
 
 - Instagram: opens straight to your DMs. Unfeed's own bar has Search, Post, DMs, Notifications and Profile, with DMs in the middle; Instagram's own bars and "get the app" banners are hidden. Friends' stories open from DMs or from their profile; there is no stories feed. Profiles show their posts, and single posts and reels always open. The home feed, the Reels tab and the Explore grid are blocked.
-- LinkedIn: opens straight to Messages. Unfeed's own bar has Profile, Messages, Search, Post and Notifications; LinkedIn's own bars and "get the app" banners are hidden. Single posts and Recent activity always open. The feed and post search results are blocked.
-- The top bar: Link (paste a link) on Instagram, QR on LinkedIn, the switcher, and the Settings gear.
+- LinkedIn: opens straight to Messages. Unfeed's own bar has Profile, Messages, Search, Post and Notifications; LinkedIn's own bars and "get the app" banners are hidden. Single posts and Recent activity always open. The feed and post search results are blocked. Messages is the full LinkedIn messaging, with reactions and replies.
+- X: opens straight to DMs. Unfeed's own bar has Search, Post, DMs, Notifications and Profile; X's own bars are hidden. Notifications open the post they point to, profiles show their posts, and search works. The home timeline, Explore, trends, lists and communities are blocked, and so is the Discover more pile under a post.
+- The top bar: Link (paste a link) on Instagram and X, QR on LinkedIn, the switcher, and the Settings gear.
+- Speed: Notifications and Profile load in the background, pages show a dark placeholder while loading, and known trackers are blocked. Settings > Speed shows how long pages take on your phone.
 - Each tab keeps its own page and scroll, and never reloads by itself.
 - The pages keep each site's own look: no colours or fonts are forced on them.
 - Settings lists the last 20 pages that were blocked, with the rule that did it, under "Blocked pages".

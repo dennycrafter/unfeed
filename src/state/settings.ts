@@ -8,8 +8,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Settings {
   version: 1;
-  lastApp: 'instagram' | 'linkedin';
+  lastApp: 'instagram' | 'linkedin' | 'x';
   igUsername: string | null;
+  /** X's signed in username, for the X Profile tab (Denis, 21 Nov 2026). */
+  xUsername: string | null;
   liProfileUrl: string | null;
   allowSharedPosts: boolean;
   hideCounts: boolean;
@@ -20,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   version: 1,
   lastApp: 'instagram',
   igUsername: null,
+  xUsername: null,
   liProfileUrl: null,
   allowSharedPosts: true,
   hideCounts: false,
@@ -45,8 +48,9 @@ function normalizeOptionalText(value: unknown, fallback: string | null): string 
 export function applySettingsPatch(previous: Settings, patch: SettingsPatch): Settings {
   return {
     version: 1,
-    lastApp: patch.lastApp === 'instagram' || patch.lastApp === 'linkedin' ? patch.lastApp : previous.lastApp,
+    lastApp: patch.lastApp === 'instagram' || patch.lastApp === 'linkedin' || patch.lastApp === 'x' ? patch.lastApp : previous.lastApp,
     igUsername: normalizeOptionalText(patch.igUsername, previous.igUsername),
+    xUsername: normalizeOptionalText(patch.xUsername, previous.xUsername),
     liProfileUrl: normalizeOptionalText(patch.liProfileUrl, previous.liProfileUrl),
     allowSharedPosts: typeof patch.allowSharedPosts === 'boolean' ? patch.allowSharedPosts : previous.allowSharedPosts,
     hideCounts: typeof patch.hideCounts === 'boolean' ? patch.hideCounts : previous.hideCounts,
@@ -70,8 +74,9 @@ export async function loadSettings(): Promise<Settings> {
       typeof value === 'boolean' ? value : fallback;
     return {
       version: 1,
-      lastApp: record.lastApp === 'linkedin' ? 'linkedin' : 'instagram',
+      lastApp: record.lastApp === 'linkedin' || record.lastApp === 'x' ? record.lastApp : 'instagram',
       igUsername: typeof record.igUsername === 'string' ? record.igUsername : null,
+      xUsername: typeof record.xUsername === 'string' ? record.xUsername : null,
       liProfileUrl: typeof record.liProfileUrl === 'string' ? record.liProfileUrl : null,
       allowSharedPosts: boolean(record.allowSharedPosts, DEFAULT_SETTINGS.allowSharedPosts),
       hideCounts: boolean(record.hideCounts, DEFAULT_SETTINGS.hideCounts),

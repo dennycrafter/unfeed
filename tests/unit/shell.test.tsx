@@ -122,7 +122,7 @@ type GetByTestId = (id: string, options?: object) => { props: { accessibilityHin
 
 /** The web view of one Instagram or LinkedIn tab (each tab has its own). */
 function tabWebView(getByTestId: GetByTestId, tab: string) {
-  const site = tab.startsWith('li-') ? 'linkedin' : 'instagram';
+  const site = tab.startsWith('li-') ? 'linkedin' : tab.startsWith('x-') ? 'x' : 'instagram';
   return within(getByTestId(tab, anyVisibility) as never).getByTestId(`webview-${site}`, anyVisibility) as unknown as {
     props: { accessibilityHint?: string; nativeID?: string };
   };
@@ -196,7 +196,7 @@ test('Instagram tabs are Search, Post, DMs, Notifications, Profile, with DMs in 
   await hydrateSettings();
   const { getAllByRole, queryByLabelText } = await render(<Shell />);
   const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
-  expect(labels).toEqual(['Instagram', 'LinkedIn', 'Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
+  expect(labels).toEqual(['Instagram', 'LinkedIn', 'X', 'Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
   expect(queryByLabelText('Stories tab')).toBeNull();
 });
 
@@ -246,7 +246,7 @@ test('LinkedIn tabs are Profile, Messages, Search, Post, Notifications, Profile 
   const { getAllByRole, getByLabelText } = await render(<Shell />);
   await fireEvent.press(getByLabelText('LinkedIn'));
   const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
-  expect(labels).toEqual(['Instagram', 'LinkedIn', 'Profile tab', 'Messages tab', 'Search tab', 'Post tab', 'Notifications tab']);
+  expect(labels).toEqual(['Instagram', 'LinkedIn', 'X', 'Profile tab', 'Messages tab', 'Search tab', 'Post tab', 'Notifications tab']);
   expect(getByLabelText('Messages tab').props.accessibilityState).toEqual({ selected: true });
 });
 
@@ -515,4 +515,50 @@ test('a preloaded tab that already painted is ready the moment it is tapped', as
   } finally {
     jest.useRealTimers();
   }
+});
+
+// X (Denis, 21 Nov 2026): a third app with no feed.
+test('X loads only when first opened, on DMs, with Search, Post, DMs, Notifications and Profile', async () => {
+  await hydrateSettings();
+  const { getAllByRole, getByLabelText, getByTestId, queryByTestId } = await render(<Shell />);
+  expect(queryByTestId('x-tab-messages', anyVisibility)).toBeNull();
+  await fireEvent.press(getByLabelText('X'));
+  expect(tabWebView(getByTestId, 'x-tab-messages').props.accessibilityHint).toBe('https://x.com/i/chat');
+  const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
+  expect(labels).toEqual(['Instagram', 'LinkedIn', 'X', 'Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
+  await fireEvent.press(getByLabelText('Notifications tab'));
+  expect(tabWebView(getByTestId, 'x-tab-notifications').props.accessibilityHint).toBe('https://x.com/notifications');
+  await waitFor(async () => expect((await storedSettings()).lastApp).toBe('x'));
+});
+
+test('X Post opens the composer in the tab that is showing', async () => {
+  await hydrateSettings();
+  mockInjectJavaScript.mockClear();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('X'));
+  await fireEvent.press(getByLabelText('Post tab'));
+  await waitFor(() => expect(tabWebView(getByTestId, 'x-tab-messages').props.accessibilityHint).toBe('https://x.com/compose/post'));
+});
+
+test('the X Profile tab moves to the username the page reveals, and Settings keeps it', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByTestId } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('X'));
+  await fireEvent.press(getByLabelText('Profile tab'));
+  expect(tabWebView(getByTestId, 'x-tab-profile').props.accessibilityHint).toBe('https://x.com/settings/profile');
+  await postFromPage(tabWebView(getByTestId, 'x-tab-messages'), { type: 'x-username', value: 'denis_x' });
+  await waitFor(() => expect(tabWebView(getByTestId, 'x-tab-profile').props.accessibilityHint).toBe('https://x.com/denis_x'));
+  await waitFor(async () => expect((await storedSettings()).xUsername).toBe('denis_x'));
+});
+
+test('X Search shows a box, then the results X gives for what was typed', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByPlaceholderText, getByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('X'));
+  await fireEvent.press(getByLabelText('Search tab'));
+  expect(getByText('Search X for people, posts and topics. The feed never shows here.')).toBeTruthy();
+  await fireEvent(getByPlaceholderText('Search X'), 'submitEditing');
+  await fireEvent.changeText(getByPlaceholderText('Search X'), 'rust lang');
+  await fireEvent(getByPlaceholderText('Search X'), 'submitEditing');
+  expect(tabWebView(getByTestId, 'x-tab-search').props.accessibilityHint).toBe('https://x.com/search?q=rust%20lang&src=typed_query');
 });

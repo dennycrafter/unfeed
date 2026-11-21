@@ -1,0 +1,43 @@
+/*
+  Unfeed hide rules for X (Denis, 21 Nov 2026). Stable hooks only: href,
+  aria-label, role and X's data-testid names. X's generated class names are
+  never used. Same marker format as instagram.css (src/inject/cssRules.ts).
+*/
+
+/* @unfeed-rule x-feed-links -- links into the home timeline, explore, lists, communities and trends */
+a[href="/home"],
+a[href="/explore"],
+a[href^="/explore/"],
+a[href^="/i/lists"],
+a[href^="/i/communities"],
+a[href^="/i/trends"],
+a[data-testid="AppTabBar_Home_Link"],
+a[data-testid="AppTabBar_Explore_Link"] {
+  display: none !important;
+}
+
+/* @unfeed-rule x-side-feeds -- trends and who to follow panels */
+[aria-label="Timeline: Trending now"],
+[aria-label="Who to follow"],
+aside[aria-label="Who to follow"],
+[data-testid="sidebarColumn"] {
+  display: none !important;
+}
+
+/* @unfeed-rule x-swept -- anything a sweep in src/inject/x.ts decided to hide */
+[data-unfeed-hidden] {
+  display: none !important;
+}
+
+/* @unfeed-rule x-home-timeline -- the home timeline itself, wherever X draws it (checked 21 Nov 2026) */
+[aria-label="Timeline: Your Home Timeline"],
+[aria-label^="Timeline: Your Home"] {
+  display: none !important;
+}
+
+/* @unfeed-rule x-compose-backdrop -- while the composer is open X draws the home feed behind it; that page goes blank (the composer sits in its own layer) */
+html[data-unfeed-compose] [data-testid="primaryColumn"],
+html[data-unfeed-compose] [data-testid="sidebarColumn"],
+html[data-unfeed-compose] header[role="banner"] {
+  visibility: hidden !important;
+}

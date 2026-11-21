@@ -4,9 +4,9 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/tokens';
 
-export type AppKey = 'instagram' | 'linkedin';
+export type AppKey = 'instagram' | 'linkedin' | 'x';
 
-const LABELS: Record<AppKey, string> = { instagram: 'Instagram', linkedin: 'LinkedIn' };
+const LABELS: Record<AppKey, string> = { instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X' };
 
 interface AppSwitcherProps {
   active: AppKey;

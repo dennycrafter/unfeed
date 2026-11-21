@@ -4,8 +4,9 @@
 
 import instagramJson from './instagram.json';
 import linkedinJson from './linkedin.json';
+import xJson from './x.json';
 
-export type Site = 'instagram' | 'linkedin';
+export type Site = 'instagram' | 'linkedin' | 'x';
 export type RouteAction = 'allow' | 'redirect' | 'external';
 
 export interface DecideResult {
@@ -255,6 +256,7 @@ function parseSiteRules(raw: unknown, site: Site): SiteRules {
 export const SITE_ORIGINS: Record<Site, string> = {
   instagram: 'https://www.instagram.com',
   linkedin: 'https://www.linkedin.com',
+  x: 'https://x.com',
 };
 
 /** Redirect targets are paths; the host resolves against the site origin. */
@@ -291,6 +293,7 @@ function redirectWithQuery(rule: RouteRule, url: URL, path: string): DecideResul
 const RULES: Record<Site, SiteRules> = {
   instagram: parseSiteRules(instagramJson, 'instagram'),
   linkedin: parseSiteRules(linkedinJson, 'linkedin'),
+  x: parseSiteRules(xJson, 'x'),
 };
 
 export function decide(site: Site, rawUrl: string, context: string, settings: DecideSettings): DecideResult {

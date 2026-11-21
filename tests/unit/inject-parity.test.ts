@@ -5,9 +5,11 @@
 import vm from 'vm';
 import { INSTAGRAM_INJECT_SCRIPT } from '../../src/inject/generated/instagram.generated';
 import { LINKEDIN_INJECT_SCRIPT } from '../../src/inject/generated/linkedin.generated';
+import { X_INJECT_SCRIPT } from '../../src/inject/generated/x.generated';
 import { decide } from '../../src/rules/decide';
 import { INSTAGRAM_DECIDE_TABLE } from './instagram-table';
 import { LINKEDIN_DECIDE_TABLE } from './linkedin-table';
+import { X_DECIDE_TABLE } from './x-table';
 
 interface ExposedMatcher {
   site: string;
@@ -26,11 +28,13 @@ function expose(script: string): ExposedMatcher | undefined {
 
 const instagramExposed = expose(INSTAGRAM_INJECT_SCRIPT);
 const linkedinExposed = expose(LINKEDIN_INJECT_SCRIPT);
+const xExposed = expose(X_INJECT_SCRIPT);
 
 describe('injected matcher parity', () => {
   test.each([
     ['instagram', instagramExposed],
     ['linkedin', linkedinExposed],
+    ['x', xExposed],
   ])('the bundle exposes the %s matcher', (_site, exposed) => {
     expect(exposed).toBeDefined();
     expect(typeof exposed?.decide).toBe('function');
@@ -39,6 +43,7 @@ describe('injected matcher parity', () => {
   test('the exposed sites match their bundles', () => {
     expect(instagramExposed?.site).toBe('instagram');
     expect(linkedinExposed?.site).toBe('linkedin');
+    expect(xExposed?.site).toBe('x');
   });
 
   test.each(INSTAGRAM_DECIDE_TABLE)('instagram: $name matches native decide', (row) => {
@@ -46,6 +51,12 @@ describe('injected matcher parity', () => {
     const settings = { allowSharedPosts: row.allowSharedPosts ?? true };
     const native = decide('instagram', row.url, context, settings);
     expect(instagramExposed?.decide('instagram', row.url, context, settings)).toEqual(native);
+  });
+
+  test.each(X_DECIDE_TABLE)('x: $name matches native decide', (row) => {
+    const settings = { allowSharedPosts: true };
+    const native = decide('x', row.url, 'messages', settings);
+    expect(xExposed?.decide('x', row.url, 'messages', settings)).toEqual(native);
   });
 
   test.each(LINKEDIN_DECIDE_TABLE)('linkedin: $name matches native decide', (row) => {

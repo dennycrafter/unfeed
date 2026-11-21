@@ -36,3 +36,13 @@ test('findLink takes the first link in the text', () => {
   expect(findLink('one https://a.com/x two https://b.com/y')).toBe('https://a.com/x');
   expect(findLink('nothing here')).toBeNull();
 });
+
+// X links open in the X tab (Denis, 21 Nov 2026).
+test.each([
+  ['https://x.com/someone/status/123', 'https://x.com/someone/status/123'],
+  ['https://twitter.com/someone/status/123?s=20', 'https://x.com/someone/status/123?s=20'],
+  ['look at this x.com/someone/status/9 lol', 'https://x.com/someone/status/9'],
+  ['https://mobile.twitter.com/someone', 'https://x.com/someone'],
+])('%s opens in X', (text, url) => {
+  expect(readPastedLink(text)).toEqual({ kind: 'x', url });
+});

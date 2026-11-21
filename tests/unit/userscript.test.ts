@@ -8,8 +8,10 @@ import { join } from 'node:path';
 import vm from 'vm';
 import { INSTAGRAM_INJECT_SCRIPT } from '../../src/inject/generated/instagram.generated';
 import { LINKEDIN_INJECT_SCRIPT } from '../../src/inject/generated/linkedin.generated';
+import { X_INJECT_SCRIPT } from '../../src/inject/generated/x.generated';
 import instagramJson from '../../src/rules/instagram.json';
 import linkedinJson from '../../src/rules/linkedin.json';
+import xJson from '../../src/rules/x.json';
 import { decide, type Site } from '../../src/rules/decide';
 import {
   buildUserScriptHeader,
@@ -19,6 +21,7 @@ import {
 } from '../../src/userscript/header';
 import { INSTAGRAM_DECIDE_TABLE } from './instagram-table';
 import { LINKEDIN_DECIDE_TABLE } from './linkedin-table';
+import { X_DECIDE_TABLE } from './x-table';
 
 function scriptPath(site: Site): string {
   return join(process.cwd(), 'userscripts', `unfeed-${site}.user.js`);
@@ -31,26 +34,31 @@ function readScript(site: Site): string {
 const BUNDLES: Record<Site, string> = {
   instagram: INSTAGRAM_INJECT_SCRIPT,
   linkedin: LINKEDIN_INJECT_SCRIPT,
+  x: X_INJECT_SCRIPT,
 };
 
 const RULES_JSON: Record<Site, { hosts: string[] }> = {
   instagram: instagramJson,
   linkedin: linkedinJson,
+  x: xJson,
 };
 
 const DECIDE_TABLES: Record<Site, typeof INSTAGRAM_DECIDE_TABLE> = {
   instagram: INSTAGRAM_DECIDE_TABLE,
   linkedin: LINKEDIN_DECIDE_TABLE,
+  x: X_DECIDE_TABLE,
 };
 
-const SITES: Site[] = ['instagram', 'linkedin'];
+const SITES: Site[] = ['instagram', 'linkedin', 'x'];
+
+const NAMES: Record<Site, string> = { instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X' };
 
 describe('userscript header', () => {
   test.each(SITES)('%s: header opens with the metadata block', (site) => {
     const header = buildUserScriptHeader(site);
     expect(header.startsWith('// ==UserScript==')).toBe(true);
     expect(header.endsWith('// ==/UserScript==')).toBe(true);
-    expect(header).toContain(`// @name Unfeed ${site === 'instagram' ? 'Instagram' : 'LinkedIn'}`);
+    expect(header).toContain(`// @name Unfeed ${NAMES[site]}`);
     expect(header).toContain(`// @version ${USERSCRIPT_VERSION}`);
   });
 
@@ -62,6 +70,7 @@ describe('userscript header', () => {
     const charterRequired: Record<Site, string> = {
       instagram: 'https://www.instagram.com/*',
       linkedin: 'https://www.linkedin.com/*',
+      x: 'https://x.com/*',
     };
     expect(matches).toContain(charterRequired[site]);
   });
