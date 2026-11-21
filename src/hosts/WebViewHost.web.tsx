@@ -22,7 +22,7 @@ export const WebViewHost = forwardRef<WebViewHostApi, WebViewHostProps>(function
   }, [url]);
   const result = decide(site, shown, context, settings);
   const displayUrl = result.action === 'redirect' ? toAbsoluteUrl(site, result.to ?? '/') : shown;
-  const siteLabel = site === 'instagram' ? 'Instagram' : 'LinkedIn';
+  const siteLabel = { instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X' }[site];
 
   // No real page on web: the tab behaviour API is a no-op.
   const api = useRef<WebViewHostApi>({

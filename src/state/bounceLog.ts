@@ -38,7 +38,7 @@ function isEntry(value: unknown): value is BounceEntry {
   const record = value as Record<string, unknown>;
   return (
     typeof record.at === 'number' &&
-    (record.site === 'instagram' || record.site === 'linkedin') &&
+    (record.site === 'instagram' || record.site === 'linkedin' || record.site === 'x') &&
     typeof record.url === 'string' &&
     typeof record.rule === 'string' &&
     (record.to === undefined || typeof record.to === 'string')

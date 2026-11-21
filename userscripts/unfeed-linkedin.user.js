@@ -142,6 +142,36 @@ footer:has(a[href*="/legal/"]) {
     ]
   };
 
+  // src/rules/x.json
+  var x_default = {
+    site: "x",
+    hosts: ["x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"],
+    allowedHostSuffixes: ["twimg.com"],
+    allowedHostPaths: [],
+    rules: [
+      {
+        id: "x-1-auth",
+        match: { kind: "prefix", paths: ["/i/flow/", "/i/jf/onboarding/", "/login/", "/logout/", "/account/", "/settings/", "/i/oauth2/", "/i/safety/", "/i/verified", "/i/premium"] },
+        action: "allow"
+      },
+      { id: "x-2-compose", match: { kind: "prefix", paths: ["/compose/", "/intent/"] }, action: "allow" },
+      { id: "x-3-messages", match: { kind: "prefix", paths: ["/messages/", "/i/chat/"] }, action: "allow" },
+      { id: "x-4-notifications", match: { kind: "prefix", paths: ["/notifications/"] }, action: "allow" },
+      { id: "x-5-home", match: { kind: "home" }, action: "redirect", to: "/messages/" },
+      { id: "x-5-home-timeline", match: { kind: "exact", paths: ["/home/"] }, action: "redirect", to: "/messages/" },
+      {
+        id: "x-6-feeds",
+        match: {
+          kind: "prefix",
+          paths: ["/explore/", "/search/", "/hashtag/", "/i/lists/", "/i/communities/", "/i/bookmarks/", "/i/trends/", "/i/topics/"]
+        },
+        action: "redirect",
+        to: "/messages/"
+      },
+      { id: "x-7-fallback", match: { kind: "any" }, action: "allow" }
+    ]
+  };
+
   // src/rules/decide.ts
   var MATCH_KINDS = ["prefix", "home", "singleSegmentPrefix", "username", "exact", "any"];
   var RULE_ACTIONS = ["allow", "redirect", "allowIfSharedPosts"];
@@ -328,7 +358,8 @@ footer:has(a[href*="/legal/"]) {
   }
   var RULES = {
     instagram: parseSiteRules(instagram_default, "instagram"),
-    linkedin: parseSiteRules(linkedin_default2, "linkedin")
+    linkedin: parseSiteRules(linkedin_default2, "linkedin"),
+    x: parseSiteRules(x_default, "x")
   };
   function decide(site, rawUrl, context, settings) {
     const rules = RULES[site];
@@ -369,11 +400,20 @@ footer:has(a[href*="/legal/"]) {
   }
 
   // src/rules/returnRules.ts
-  var RETURN_RULES = /* @__PURE__ */ new Set(["ig-5-home", "ig-8-reels", "li-9-feed", "li-9-home"]);
+  var RETURN_RULES = /* @__PURE__ */ new Set([
+    "ig-5-home",
+    "ig-8-reels",
+    "li-9-feed",
+    "li-9-home",
+    // X (Denis, 21 Nov 2026): home and the feeds go back, never to a timeline.
+    "x-5-home",
+    "x-5-home-timeline",
+    "x-6-feeds"
+  ]);
   function isReturnablePage(url) {
     try {
       const path = new URL(url).pathname.toLowerCase();
-      return !path.startsWith("/stories/") && path !== "/" && path !== "/feed/" && !path.startsWith("/accounts/login");
+      return !path.startsWith("/stories/") && path !== "/" && path !== "/feed/" && path !== "/home" && !path.startsWith("/accounts/login") && !path.startsWith("/compose/") && !path.startsWith("/i/flow/");
     } catch {
       return false;
     }

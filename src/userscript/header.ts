@@ -4,6 +4,7 @@
 
 import instagramJson from '../rules/instagram.json';
 import linkedinJson from '../rules/linkedin.json';
+import xJson from '../rules/x.json';
 import type { Site } from '../rules/decide';
 
 export const USERSCRIPT_VERSION = '1.8.0';
@@ -24,11 +25,17 @@ const META: Record<Site, SiteMeta> = {
     description:
       'LinkedIn with no feed: opens your messages, hides the feed and post results, and keeps messages, people search and profiles.',
   },
+  x: {
+    name: 'Unfeed X',
+    description:
+      'X with no feed: opens your messages, blocks the home timeline, explore and search, and keeps posting, replies, messages, notifications and your profile.',
+  },
 };
 
 const RULES_JSON: Record<Site, { hosts: string[] }> = {
   instagram: instagramJson,
   linkedin: linkedinJson,
+  x: xJson,
 };
 
 /** One @match line per host in the site's rules file, so the userscript can

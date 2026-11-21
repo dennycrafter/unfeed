@@ -7,10 +7,14 @@ import { classifyCode } from '../qr/classifyCode';
 export type PastedLink =
   | { kind: 'instagram'; url: string }
   | { kind: 'linkedin'; url: string }
+  | { kind: 'x'; url: string }
   | { kind: 'none' };
 
+/** X and Twitter hosts; a pasted post opens in the X tab (Denis, 21 Nov 2026). */
+const X_HOST = /^(?:www\.|mobile\.)?(?:x|twitter)\.com$/i;
+
 const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"']+/i;
-const BARE_SITE_LINK = /\b(?:www\.)?(?:instagram\.com|instagr\.am|linkedin\.com|lnkd\.in)\/[^\s<>"']*/i;
+const BARE_SITE_LINK = /\b(?:www\.)?(?:instagram\.com|instagr\.am|linkedin\.com|lnkd\.in|x\.com|twitter\.com)\/[^\s<>"']*/i;
 
 /** Finds the first link in pasted text ("check this https://..." included),
  * also when the share sheet left the https:// off. Trailing punctuation from
@@ -27,6 +31,12 @@ export function findLink(text: string): string | null {
 export function readPastedLink(text: string): PastedLink {
   const link = findLink(text);
   if (!link) return { kind: 'none' };
+  try {
+    const parsed = new URL(link);
+    if (X_HOST.test(parsed.hostname)) return { kind: 'x', url: `https://x.com${parsed.pathname}${parsed.search}` };
+  } catch {
+    return { kind: 'none' };
+  }
   const payload = classifyCode(link);
   if (payload.kind === 'linkedin') return { kind: 'linkedin', url: payload.url };
   if (payload.kind !== 'instagram') return { kind: 'none' };

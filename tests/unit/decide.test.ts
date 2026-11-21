@@ -5,12 +5,20 @@
 import { decide } from '../../src/rules/decide';
 import { INSTAGRAM_DECIDE_TABLE } from './instagram-table';
 import { LINKEDIN_DECIDE_TABLE } from './linkedin-table';
+import { X_DECIDE_TABLE } from './x-table';
 
 describe('decide instagram rules', () => {
   test.each(INSTAGRAM_DECIDE_TABLE)('$name', (row) => {
     const result = decide('instagram', row.url, row.context ?? 'dms', {
       allowSharedPosts: row.allowSharedPosts ?? true,
     });
+    expect({ action: result.action, to: result.to }).toEqual(row.expected);
+  });
+});
+
+describe('decide x rules', () => {
+  test.each(X_DECIDE_TABLE)('$name', (row) => {
+    const result = decide('x', row.url, row.context ?? 'messages', { allowSharedPosts: true });
     expect({ action: result.action, to: result.to }).toEqual(row.expected);
   });
 });

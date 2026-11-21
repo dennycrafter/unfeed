@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- X single post fixture: the post, a reply, then Discover more and a
+     recommended post. Fake hashed classes. -->
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Someone on X</title></head>
+  <body>
+    <main role="main">
+      <div data-testid="primaryColumn">
+        <div aria-label="Timeline: Conversation">
+          <div data-testid="cellInnerDiv" id="post"><article data-testid="tweet">The post itself</article></div>
+          <div data-testid="cellInnerDiv" id="reply"><article data-testid="tweet">A reply</article></div>
+          <div data-testid="cellInnerDiv" id="discover"><div><h2 role="heading"><span>Discover more</span></h2></div></div>
+          <div data-testid="cellInnerDiv" id="sourced"><span>Sourced from across X</span></div>
+          <div data-testid="cellInnerDiv" id="recommended"><article data-testid="tweet">A stranger's viral post</article></div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

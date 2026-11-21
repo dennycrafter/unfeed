@@ -68,6 +68,7 @@ describe('loadSettings', () => {
       version: 1,
       lastApp: 'linkedin',
       igUsername: 'denis',
+      xUsername: 'denis_x',
       liProfileUrl: 'https://www.linkedin.com/in/denis-popov/',
       allowSharedPosts: false,
       hideCounts: true,

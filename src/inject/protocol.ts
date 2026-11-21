@@ -8,6 +8,8 @@ export type PageMessage =
   | { type: 'inject-error'; message: string }
   | { type: 'ig-username'; value: string }
   | { type: 'ig-create-missing' }
+  /** X's signed in username, for the Profile tab (Denis, 21 Nov 2026). */
+  | { type: 'x-username'; value: string }
   | { type: 'li-own-profile'; url: string }
   | { type: 'li-composer'; open: boolean }
   /** The page sent itself somewhere else (in-page guard, composer closed),
@@ -29,6 +31,7 @@ export function isPageMessage(value: unknown): value is PageMessage {
   if (record.type === 'inject-error') return typeof record.message === 'string';
   if (record.type === 'ig-username') return typeof record.value === 'string' && record.value.length > 0;
   if (record.type === 'ig-create-missing') return true;
+  if (record.type === 'x-username') return typeof record.value === 'string' && /^[A-Za-z0-9_]{1,15}$/.test(record.value);
   if (record.type === 'li-own-profile') return typeof record.url === 'string' && record.url.length > 0;
   if (record.type === 'li-composer') return typeof record.open === 'boolean';
   if (record.type === 'bounce') {

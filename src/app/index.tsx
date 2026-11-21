@@ -18,6 +18,7 @@ import { LinkSheet } from '@/components/LinkSheet';
 import { Toast } from '@/components/Toast';
 import { InstagramHost, INSTAGRAM_HOME_URL, INSTAGRAM_LOGOUT_URL, type InstagramHostHandle } from '@/hosts/InstagramHost';
 import { LinkedInHost } from '@/hosts/LinkedInHost';
+import { XHost } from '@/hosts/XHost';
 import type { PageMessage } from '@/inject/protocol';
 import type { PastedLink } from '@/link/pastedLink';
 import { tickHaptic } from '@/state/haptics';
@@ -57,17 +58,20 @@ function startUrl(tab: InstagramTab): string {
   }
 }
 
-function initialUnread(): { instagram: number; linkedin: number } {
+type UnreadCounts = { instagram: number; linkedin: number; x: number };
+
+function initialUnread(): UnreadCounts {
   // Web preview only: seed the unread dots from the URL so the screen tests
   // can capture the switcher with badges. Real counts arrive in page messages
   // (section 8.5), which the web placeholders never post.
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return { instagram: 0, linkedin: 0 };
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return { instagram: 0, linkedin: 0, x: 0 };
   const params = new URLSearchParams(window.location.search);
   const instagram = Number(params.get('unreadInstagram'));
   const linkedin = Number(params.get('unreadLinkedin'));
   return {
     instagram: Number.isFinite(instagram) && instagram > 0 ? Math.floor(instagram) : 0,
     linkedin: Number.isFinite(linkedin) && linkedin > 0 ? Math.floor(linkedin) : 0,
+    x: 0,
   };
 }
 
@@ -101,7 +105,11 @@ export default function Index() {
   const [opened, setOpened] = useState<Partial<Record<InstagramTab, string>>>(() => ({
     [DEFAULT_TAB]: startUrl(DEFAULT_TAB),
   }));
-  const [unread, setUnread] = useState<{ instagram: number; linkedin: number }>(initialUnread);
+  const [unread, setUnread] = useState<UnreadCounts>(initialUnread);
+  // X loads the first time it is opened (Denis, 21 Nov 2026), to spare the
+  // phone's memory, and is kept from then on.
+  const [xMounted, setXMounted] = useState(() => getStoreState().settings.lastApp === 'x');
+  const [xOpen, setXOpen] = useState<{ url: string; id: number } | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -147,11 +155,13 @@ export default function Index() {
   if (hydrated !== lastHydrated) {
     setLastHydrated(hydrated);
     if (hydrated) setActiveApp(settings.lastApp);
+    if (hydrated && settings.lastApp === 'x') setXMounted(true);
   }
 
   const handleSelectApp = useCallback((app: AppKey) => {
     tickHaptic(getStoreState().settings.haptics);
     setActiveApp(app);
+    if (app === 'x') setXMounted(true);
     updateSettings({ lastApp: app });
   }, []);
 
@@ -212,6 +222,17 @@ export default function Index() {
     setUnread((prev) => (prev.linkedin === message.count ? prev : { ...prev, linkedin: message.count }));
   }, []);
 
+  // X's unread count for the switcher dot.
+  const handleXMessage = useCallback((message: PageMessage) => {
+    if (message.type !== 'unread') return;
+    setUnread((prev) => (prev.x === message.count ? prev : { ...prev, x: message.count }));
+  }, []);
+
+  const handleXUsername = useCallback((value: string): void => {
+    if (getStoreState().settings.xUsername === value) return;
+    updateSettings({ xUsername: value });
+  }, []);
+
   // A scanned or pasted Instagram link opens in the tab that is showing.
   const openInstagramUrl = useCallback(
     (url: string): void => {
@@ -228,6 +249,12 @@ export default function Index() {
       if (link.kind === 'linkedin') {
         setActiveApp('linkedin');
         setLinkedInOpen((current) => ({ url: link.url, id: (current?.id ?? 0) + 1 }));
+        return;
+      }
+      if (link.kind === 'x') {
+        setActiveApp('x');
+        setXMounted(true);
+        setXOpen((current) => ({ url: link.url, id: (current?.id ?? 0) + 1 }));
         return;
       }
       openInstagramUrl(link.url);
@@ -405,6 +432,21 @@ export default function Index() {
             openRequest={linkedInOpen}
             onMessage={handleLinkedInMessage}
             visible={activeApp === 'linkedin'}
+          />
+        ) : null}
+      </View>
+      <View style={[styles.hostArea, activeApp !== 'x' && styles.hidden]} testID="host-x">
+        {hydrated && xMounted ? (
+          <XHost
+            settings={settings}
+            hideCounts={settings.hideCounts}
+            haptics={settings.haptics}
+            username={settings.xUsername}
+            onUsernameDetected={handleXUsername}
+            logoutSignal={logout?.site === 'x' ? logout.id : 0}
+            visible={activeApp === 'x'}
+            openRequest={xOpen}
+            onMessage={handleXMessage}
           />
         ) : null}
       </View>

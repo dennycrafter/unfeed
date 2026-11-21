@@ -17,6 +17,8 @@ import { requestSiteLogout, resetSettings, updateSettings, useSettings } from '@
 import { bars, colors, radius, space, type } from '@/theme/tokens';
 import type { Site } from '@/rules/decide';
 
+const SITE_NAMES: Record<Site, string> = { instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X' };
+
 interface ConfirmSpec {
   title: string;
   body: string;
@@ -96,7 +98,7 @@ function QuietButton({ label, onPress, danger }: { label: string; onPress: () =>
 /** One stopped page in the Blocked pages list: when, which app, the
  * address, and the rule that fired (Denis, 25 Oct 2026). */
 function BounceRow({ entry }: { entry: BounceEntry }) {
-  const app = entry.site === 'instagram' ? 'Instagram' : 'LinkedIn';
+  const app = SITE_NAMES[entry.site];
   return (
     <View style={styles.bounceRow} accessibilityLabel={`Blocked ${entry.url} by rule ${entry.rule}`}>
       <Text style={styles.bounceMeta}>
@@ -115,7 +117,7 @@ function BounceRow({ entry }: { entry: BounceEntry }) {
 
 /** One line of the Speed list: the typical time for one kind of wait. */
 function SpeedRow({ row }: { row: SpeedSummary }) {
-  const app = row.site === 'instagram' ? 'Instagram' : 'LinkedIn';
+  const app = SITE_NAMES[row.site];
   return (
     <View style={styles.bounceRow} accessibilityLabel={`${app} ${SPEED_KIND_LABELS[row.kind]} ${formatSeconds(row.typicalMs)}`}>
       <Text style={styles.bounceMeta}>
@@ -166,6 +168,7 @@ export default function SettingsScreen() {
   // Drafts hold what is typed; null means show the stored value.
   const [usernameDraft, setUsernameDraft] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState<string | null>(null);
+  const [xUsernameDraft, setXUsernameDraft] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -188,7 +191,7 @@ export default function SettingsScreen() {
   };
 
   const askLogout = (site: Site): void => {
-    const name = site === 'instagram' ? 'Instagram' : 'LinkedIn';
+    const name = SITE_NAMES[site];
     setConfirm({
       title: `Log out of ${name}`,
       body: 'The app signs this account out here. You can log back in with your username and password.',
@@ -272,7 +275,27 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <SectionLabel>Both apps</SectionLabel>
+        <SectionLabel>X</SectionLabel>
+        <View style={styles.box}>
+          <TextRow
+            label="X username"
+            placeholder="your username"
+            value={xUsernameDraft ?? settings.xUsername ?? ''}
+            onChange={setXUsernameDraft}
+            onCommit={(text) => {
+              setXUsernameDraft(null);
+              if (text.trim().replace(/^@/, '') === (settings.xUsername ?? '')) return;
+              updateSettings({ xUsername: text.trim().replace(/^@/, '') });
+            }}
+            keyboardType="default"
+          />
+          <Divider />
+          <View style={styles.row}>
+            <QuietButton label="Log out of X" danger onPress={() => askLogout('x')} />
+          </View>
+        </View>
+
+        <SectionLabel>All apps</SectionLabel>
         <View style={styles.box}>
           {/* Single posts and reels always open now (Denis, 25 Oct 2026), so the
               old shared posts switch is gone. */}

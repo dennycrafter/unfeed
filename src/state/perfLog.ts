@@ -34,7 +34,7 @@ export interface SpeedSummary {
 export const SPEED_LOG_KEY = 'unfeed.speed.v1';
 export const SPEED_LOG_LIMIT = 200;
 
-const SITES: Site[] = ['instagram', 'linkedin'];
+const SITES: Site[] = ['instagram', 'linkedin', 'x'];
 const KINDS: SpeedKind[] = ['tab', 'open', 'load', 'move'];
 
 let entries: SpeedEntry[] = [];

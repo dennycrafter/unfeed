@@ -41,6 +41,7 @@ const namedCssPlugin: Plugin = {
 const entries: Array<{ entry: string; exportName: string }> = [
   { entry: 'instagram', exportName: 'INSTAGRAM_INJECT_SCRIPT' },
   { entry: 'linkedin', exportName: 'LINKEDIN_INJECT_SCRIPT' },
+  { entry: 'x', exportName: 'X_INJECT_SCRIPT' },
 ];
 
 async function main(): Promise<void> {
@@ -75,7 +76,7 @@ export const ${exportName} = ${JSON.stringify(js)};
     // the repo; CI fails when the committed copy goes stale.
     const scriptDir = join(root, 'userscripts');
     mkdirSync(scriptDir, { recursive: true });
-    const header = buildUserScriptHeader(entry as 'instagram' | 'linkedin');
+    const header = buildUserScriptHeader(entry as 'instagram' | 'linkedin' | 'x');
     writeFileSync(join(scriptDir, `unfeed-${entry}.user.js`), `${header}\n\n${js}`);
     console.log(`build:inject: wrote userscripts/unfeed-${entry}.user.js`);
   }
