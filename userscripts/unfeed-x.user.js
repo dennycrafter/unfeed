@@ -23,13 +23,12 @@
   never used. Same marker format as instagram.css (src/inject/cssRules.ts).
 */
 
-/* @unfeed-rule x-feed-links -- links into the home timeline, explore, search, lists, communities, bookmarks and trends */
+/* @unfeed-rule x-feed-links -- links into the home timeline, explore, lists, communities and trends */
 a[href="/home"],
 a[href="/explore"],
 a[href^="/explore/"],
 a[href^="/i/lists"],
 a[href^="/i/communities"],
-a[href="/i/bookmarks"],
 a[href^="/i/trends"],
 a[data-testid="AppTabBar_Home_Link"],
 a[data-testid="AppTabBar_Explore_Link"] {
@@ -222,13 +221,14 @@ aside[aria-label="Who to follow"],
       { id: "x-2-compose", match: { kind: "prefix", paths: ["/compose/", "/intent/"] }, action: "allow" },
       { id: "x-3-messages", match: { kind: "prefix", paths: ["/messages/", "/i/chat/"] }, action: "allow" },
       { id: "x-4-notifications", match: { kind: "prefix", paths: ["/notifications/"] }, action: "allow" },
+      { id: "x-4-search", match: { kind: "prefix", paths: ["/search/"], query: ["q"] }, action: "allow" },
       { id: "x-5-home", match: { kind: "home" }, action: "redirect", to: "/messages/" },
       { id: "x-5-home-timeline", match: { kind: "exact", paths: ["/home/"] }, action: "redirect", to: "/messages/" },
       {
         id: "x-6-feeds",
         match: {
           kind: "prefix",
-          paths: ["/explore/", "/search/", "/hashtag/", "/i/lists/", "/i/communities/", "/i/bookmarks/", "/i/trends/", "/i/topics/"]
+          paths: ["/explore/", "/search/", "/i/lists/", "/i/communities/", "/i/trends/", "/i/topics/"]
         },
         action: "redirect",
         to: "/messages/"
@@ -869,49 +869,11 @@ aside[aria-label="Who to follow"],
     for (const rule of rules) installStyle(`unfeed-rule-x-${rule.id}`, ruleCss(rule));
   };
   var HIDDEN_ATTR = "data-unfeed-hidden";
-  var TIMELINE_ATTR = "data-unfeed-timeline";
-  var NOTE_ID = "unfeed-x-note";
   function hide(element) {
     if (element.getAttribute(HIDDEN_ATTR) === null) element.setAttribute(HIDDEN_ATTR, "");
   }
-  var NOT_A_PROFILE = /* @__PURE__ */ new Set([
-    "home",
-    "explore",
-    "search",
-    "notifications",
-    "messages",
-    "compose",
-    "settings",
-    "i",
-    "login",
-    "logout",
-    "account",
-    "intent",
-    "hashtag",
-    "tos",
-    "privacy",
-    "jobs"
-  ]);
-  var USERNAME = /^[A-Za-z0-9_]{1,15}$/;
-  var POST_LISTS = /* @__PURE__ */ new Set(["with_replies", "media", "likes", "highlights", "articles", "superfollows"]);
-  function profileOf(pathname) {
-    const parts = pathname.split("/").filter(Boolean);
-    const name = parts[0];
-    if (!name || !USERNAME.test(name) || NOT_A_PROFILE.has(name.toLowerCase())) return null;
-    if (parts.length > 1 && !POST_LISTS.has(parts[1].toLowerCase())) return null;
-    return name;
-  }
-  var OWN_KEY = "unfeed-x-username";
-  function ownUsername() {
-    var _a, _b;
-    try {
-      return (_b = (_a = window.localStorage) == null ? void 0 : _a.getItem(OWN_KEY)) != null ? _b : null;
-    } catch {
-      return null;
-    }
-  }
   var detectUsername = (_settings, post) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     const link = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
     const href = (_a = link == null ? void 0 : link.getAttribute("href")) != null ? _a : "";
     const value = (_b = /^\/([A-Za-z0-9_]{1,15})$/.exec(href)) == null ? void 0 : _b[1];
@@ -920,43 +882,7 @@ aside[aria-label="Who to follow"],
     const state = scope.__UNFEED_X__ = (_c = scope.__UNFEED_X__) != null ? _c : {};
     if (state.posted === value) return;
     state.posted = value;
-    try {
-      (_d = window.localStorage) == null ? void 0 : _d.setItem(OWN_KEY, value);
-    } catch {
-    }
     post({ type: "x-username", value });
-  };
-  function isOwnProfile(name) {
-    const own = ownUsername();
-    if (own && own.toLowerCase() === name.toLowerCase()) return true;
-    return document.querySelector('a[href="/settings/profile"], [data-testid="editProfileButton"]') !== null;
-  }
-  var hideOtherTimelines = () => {
-    var _a, _b, _c, _d;
-    const name = profileOf(location.pathname);
-    if (!name || isOwnProfile(name)) {
-      (_a = document.getElementById(NOTE_ID)) == null ? void 0 : _a.remove();
-      for (const element of document.querySelectorAll(`[${TIMELINE_ATTR}]`)) {
-        element.removeAttribute(TIMELINE_ATTR);
-        element.removeAttribute(HIDDEN_ATTR);
-      }
-      return;
-    }
-    const primary = (_c = (_b = document.querySelector('[data-testid="primaryColumn"]')) != null ? _b : document.querySelector("main")) != null ? _c : document.body;
-    let first = null;
-    for (const timeline of primary.querySelectorAll('[aria-label^="Timeline:"], [role="tablist"]')) {
-      if (timeline.closest('[role="dialog"]')) continue;
-      timeline.setAttribute(TIMELINE_ATTR, "");
-      hide(timeline);
-      first = first != null ? first : timeline;
-    }
-    if (first && !document.getElementById(NOTE_ID)) {
-      const message = document.createElement("div");
-      message.id = NOTE_ID;
-      message.textContent = "Posts are hidden in Unfeed. Open a single post from your notifications or messages.";
-      message.style.cssText = "padding:24px 16px;color:#8b98a5;font:15px -apple-system,system-ui,sans-serif;text-align:center;";
-      (_d = first.parentElement) == null ? void 0 : _d.insertBefore(message, first);
-    }
   };
   var DISCOVER_HEADING = /^(discover more|more posts|you might like)\b/i;
   var hideDiscoverMore = () => {
@@ -996,7 +922,7 @@ aside[aria-label="Who to follow"],
     }
   };
   setupInject("x", {
-    sweeps: [applyNamedRules, detectUsername, hideOwnBars, hideOtherTimelines, hideDiscoverMore, hideAppBanners],
+    sweeps: [applyNamedRules, detectUsername, hideOwnBars, hideDiscoverMore, hideAppBanners],
     unread: true,
     enforce: true
   });

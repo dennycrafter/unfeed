@@ -15,9 +15,12 @@ export function nextRecentSearches(current: string[], query: string): string[] {
   return [trimmed, ...current.filter((item) => item !== trimmed)].slice(0, RECENT_SEARCHES_LIMIT);
 }
 
-export async function loadRecentSearches(): Promise<string[]> {
+/** X keeps its own list (Denis, 21 Nov 2026). */
+export const X_RECENT_SEARCHES_KEY = 'unfeed.x.recentSearches.v1';
+
+export async function loadRecentSearches(key: string = KEY): Promise<string[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(key);
     if (raw === null) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -28,9 +31,9 @@ export async function loadRecentSearches(): Promise<string[]> {
   }
 }
 
-export async function saveRecentSearches(recent: string[]): Promise<void> {
+export async function saveRecentSearches(recent: string[], key: string = KEY): Promise<void> {
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(recent.slice(0, RECENT_SEARCHES_LIMIT)));
+    await AsyncStorage.setItem(key, JSON.stringify(recent.slice(0, RECENT_SEARCHES_LIMIT)));
   } catch (error) {
     console.warn('[unfeed] could not save recent searches', error);
   }

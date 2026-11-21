@@ -12,13 +12,14 @@
     { "id": "x-2-compose", "match": { "kind": "prefix", "paths": ["/compose/", "/intent/"] }, "action": "allow" },
     { "id": "x-3-messages", "match": { "kind": "prefix", "paths": ["/messages/", "/i/chat/"] }, "action": "allow" },
     { "id": "x-4-notifications", "match": { "kind": "prefix", "paths": ["/notifications/"] }, "action": "allow" },
+    { "id": "x-4-search", "match": { "kind": "prefix", "paths": ["/search/"], "query": ["q"] }, "action": "allow" },
     { "id": "x-5-home", "match": { "kind": "home" }, "action": "redirect", "to": "/messages/" },
     { "id": "x-5-home-timeline", "match": { "kind": "exact", "paths": ["/home/"] }, "action": "redirect", "to": "/messages/" },
     {
       "id": "x-6-feeds",
       "match": {
         "kind": "prefix",
-        "paths": ["/explore/", "/search/", "/hashtag/", "/i/lists/", "/i/communities/", "/i/bookmarks/", "/i/trends/", "/i/topics/"]
+        "paths": ["/explore/", "/search/", "/i/lists/", "/i/communities/", "/i/trends/", "/i/topics/"]
       },
       "action": "redirect",
       "to": "/messages/"

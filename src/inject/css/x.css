@@ -4,13 +4,12 @@
   never used. Same marker format as instagram.css (src/inject/cssRules.ts).
 */
 
-/* @unfeed-rule x-feed-links -- links into the home timeline, explore, search, lists, communities, bookmarks and trends */
+/* @unfeed-rule x-feed-links -- links into the home timeline, explore, lists, communities and trends */
 a[href="/home"],
 a[href="/explore"],
 a[href^="/explore/"],
 a[href^="/i/lists"],
 a[href^="/i/communities"],
-a[href="/i/bookmarks"],
 a[href^="/i/trends"],
 a[data-testid="AppTabBar_Home_Link"],
 a[data-testid="AppTabBar_Explore_Link"] {

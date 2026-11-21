@@ -1,5 +1,6 @@
-// X host (Denis, 21 Nov 2026), steered by the app's own tab bar: Post, DMs,
-// Notifications, Profile, opening on DMs like the other apps. X's own bars
+// X host (Denis, 21 Nov 2026), steered by the app's own tab bar: Search,
+// Post, DMs, Notifications, Profile, opening on DMs like the other apps.
+// Profiles and search work as normal; only the feeds and Explore are gone. X's own bars
 // are hidden by the inject script (src/inject/x.ts) and the home timeline,
 // explore and search never load (src/rules/x.json). Each tab has its own web
 // view, made the first time it opens and then kept. Notifications and
@@ -10,11 +11,14 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BottomBar, type BottomTab } from '../components/BottomBar';
-import { IconAvatar, IconBell, IconChat, IconPlus } from '../components/icons';
+import { EmptyState } from '../components/EmptyState';
+import { IconAvatar, IconBell, IconChat, IconPlus, IconSearch } from '../components/icons';
+import { SearchBar } from '../components/SearchBar';
 import type { PageMessage } from '../inject/protocol';
 import { X_INJECT_SCRIPT } from '../inject/generated/x.generated';
 import type { DecideSettings } from '../rules/decide';
 import { tickHaptic } from '../state/haptics';
+import { loadRecentSearches, nextRecentSearches, saveRecentSearches, X_RECENT_SEARCHES_KEY } from '../state/recentSearches';
 import { colors } from '../theme/tokens';
 import type { WebViewHostApi } from './types';
 import { WebViewHost } from './WebViewHost';
@@ -28,11 +32,11 @@ export const X_LOGOUT_URL = 'https://x.com/logout';
  * then moves to the real profile once the page reveals the username. */
 export const X_PROFILE_FALLBACK_URL = 'https://x.com/settings/profile';
 
-export type XTab = 'messages' | 'notifications' | 'profile';
+export type XTab = 'search' | 'messages' | 'notifications' | 'profile';
 type XBarKey = XTab | 'post';
 
 const DEFAULT_TAB: XTab = 'messages';
-const TAB_ORDER: XTab[] = ['messages', 'notifications', 'profile'];
+const TAB_ORDER: XTab[] = ['search', 'messages', 'notifications', 'profile'];
 
 /** Loaded in the background after X first opens, one after another. */
 export const X_PRELOAD_TABS: XTab[] = ['notifications', 'profile'];
@@ -40,18 +44,27 @@ export const X_PRELOAD_FIRST_MS = 2500;
 export const X_PRELOAD_GAP_MS = 2500;
 
 const TABS: BottomTab<XBarKey>[] = [
+  { key: 'search', label: 'Search', icon: (color) => <IconSearch color={color} /> },
   { key: 'post', label: 'Post', icon: (color) => <IconPlus color={color} /> },
   { key: 'messages', label: 'DMs', icon: (color) => <IconChat color={color} /> },
   { key: 'notifications', label: 'Notifications', icon: (color) => <IconBell color={color} /> },
   { key: 'profile', label: 'Profile', icon: (color) => <IconAvatar color={color} /> },
 ];
 
+/** X's own search results for what was typed. */
+export function xSearchUrl(query: string): string {
+  return `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query`;
+}
+
 export function xProfileUrl(username: string | null | undefined): string {
   return username ? `https://x.com/${username}` : X_PROFILE_FALLBACK_URL;
 }
 
-function startUrl(tab: XTab, username: string | null | undefined): string {
+/** The Search tab has no page until the first search. */
+function startUrl(tab: XTab, username: string | null | undefined): string | null {
   switch (tab) {
+    case 'search':
+      return null;
     case 'notifications':
       return X_NOTIFICATIONS_URL;
     case 'profile':
@@ -105,6 +118,10 @@ export const XHost = forwardRef<XHostHandle, XHostProps>(function XHost(
   const [seen, setSeen] = useState<Partial<Record<XTab, true>>>(() => ({ [DEFAULT_TAB]: true }));
   if (!seen[activeTab]) setSeen((current) => ({ ...current, [activeTab]: true }));
 
+  const openedRef = useRef(opened);
+  useLayoutEffect(() => {
+    openedRef.current = opened;
+  }, [opened]);
   const activeTabRef = useRef(activeTab);
   useLayoutEffect(() => {
     activeTabRef.current = activeTab;
@@ -120,7 +137,11 @@ export const XHost = forwardRef<XHostHandle, XHostProps>(function XHost(
   useEffect(() => {
     const timers = X_PRELOAD_TABS.map((tab, index) =>
       setTimeout(
-        () => setOpened((current) => (current[tab] ? current : { ...current, [tab]: startUrl(tab, usernameRef.current) })),
+        () =>
+          setOpened((current) => {
+            const start = startUrl(tab, usernameRef.current);
+            return current[tab] || !start ? current : { ...current, [tab]: start };
+          }),
         X_PRELOAD_FIRST_MS + index * X_PRELOAD_GAP_MS,
       ),
     );
@@ -209,11 +230,37 @@ export const XHost = forwardRef<XHostHandle, XHostProps>(function XHost(
         return;
       }
       tickHaptic(haptics);
-      setOpened((current) => (current[key] ? current : { ...current, [key]: startUrl(key, usernameRef.current) }));
+      setOpened((current) => {
+        const start = startUrl(key, usernameRef.current);
+        return current[key] || !start ? current : { ...current, [key]: start };
+      });
       setActiveTab(key);
     },
     [haptics],
   );
+
+  // Search: X's own results for what was typed, with the last searches kept.
+  const [recents, setRecents] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void loadRecentSearches(X_RECENT_SEARCHES_KEY).then((saved) => {
+      if (alive) setRecents(saved);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handleSearch = useCallback((query: string): void => {
+    const target = xSearchUrl(query);
+    if (openedRef.current.search) hostRefs.current.search?.open(target);
+    else setOpened((current) => ({ ...current, search: target }));
+    setRecents((current) => {
+      const next = nextRecentSearches(current, query);
+      void saveRecentSearches(next, X_RECENT_SEARCHES_KEY);
+      return next;
+    });
+  }, []);
 
   // Android back: back in the tab's page, then DMs, then leave.
   useEffect(() => {
@@ -235,6 +282,7 @@ export const XHost = forwardRef<XHostHandle, XHostProps>(function XHost(
 
   return (
     <View style={[styles.fill, style]}>
+      {activeTab === 'search' ? <SearchBar recents={recents} onSubmit={handleSearch} placeholder="Search X" /> : null}
       <View style={styles.fill}>
         {TAB_ORDER.map((tab) => {
           const url = opened[tab];
@@ -254,7 +302,7 @@ export const XHost = forwardRef<XHostHandle, XHostProps>(function XHost(
                 site="x"
                 url={url}
                 context="page"
-                homeUrl={startUrl(tab, username)}
+                homeUrl={startUrl(tab, username) ?? X_MESSAGES_URL}
                 settings={settings}
                 hideCounts={hideCounts}
                 injectScript={X_INJECT_SCRIPT}
@@ -265,6 +313,11 @@ export const XHost = forwardRef<XHostHandle, XHostProps>(function XHost(
             </View>
           );
         })}
+        {activeTab === 'search' && !opened.search ? (
+          <View style={styles.cover}>
+            <EmptyState message="Search X for people, posts and topics. The feed never shows here." />
+          </View>
+        ) : null}
       </View>
       <BottomBar<XBarKey> tabs={TABS} active={activeTab} onSelect={selectTab} />
     </View>

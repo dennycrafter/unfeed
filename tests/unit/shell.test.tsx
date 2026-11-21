@@ -518,14 +518,14 @@ test('a preloaded tab that already painted is ready the moment it is tapped', as
 });
 
 // X (Denis, 21 Nov 2026): a third app with no feed.
-test('X loads only when first opened, on DMs, with Post, DMs, Notifications and Profile', async () => {
+test('X loads only when first opened, on DMs, with Search, Post, DMs, Notifications and Profile', async () => {
   await hydrateSettings();
   const { getAllByRole, getByLabelText, getByTestId, queryByTestId } = await render(<Shell />);
   expect(queryByTestId('x-tab-messages', anyVisibility)).toBeNull();
   await fireEvent.press(getByLabelText('X'));
   expect(tabWebView(getByTestId, 'x-tab-messages').props.accessibilityHint).toBe('https://x.com/messages');
   const labels = getAllByRole('tab').map((tab) => tab.props.accessibilityLabel);
-  expect(labels).toEqual(['Instagram', 'LinkedIn', 'X', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
+  expect(labels).toEqual(['Instagram', 'LinkedIn', 'X', 'Search tab', 'Post tab', 'DMs tab', 'Notifications tab', 'Profile tab']);
   await fireEvent.press(getByLabelText('Notifications tab'));
   expect(tabWebView(getByTestId, 'x-tab-notifications').props.accessibilityHint).toBe('https://x.com/notifications');
   await waitFor(async () => expect((await storedSettings()).lastApp).toBe('x'));
@@ -549,4 +549,16 @@ test('the X Profile tab moves to the username the page reveals, and Settings kee
   await postFromPage(tabWebView(getByTestId, 'x-tab-messages'), { type: 'x-username', value: 'denis_x' });
   await waitFor(() => expect(tabWebView(getByTestId, 'x-tab-profile').props.accessibilityHint).toBe('https://x.com/denis_x'));
   await waitFor(async () => expect((await storedSettings()).xUsername).toBe('denis_x'));
+});
+
+test('X Search shows a box, then the results X gives for what was typed', async () => {
+  await hydrateSettings();
+  const { getByLabelText, getByPlaceholderText, getByTestId, getByText } = await render(<Shell />);
+  await fireEvent.press(getByLabelText('X'));
+  await fireEvent.press(getByLabelText('Search tab'));
+  expect(getByText('Search X for people, posts and topics. The feed never shows here.')).toBeTruthy();
+  await fireEvent(getByPlaceholderText('Search X'), 'submitEditing');
+  await fireEvent.changeText(getByPlaceholderText('Search X'), 'rust lang');
+  await fireEvent(getByPlaceholderText('Search X'), 'submitEditing');
+  expect(tabWebView(getByTestId, 'x-tab-search').props.accessibilityHint).toBe('https://x.com/search?q=rust%20lang&src=typed_query');
 });

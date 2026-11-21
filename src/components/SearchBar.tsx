@@ -9,9 +9,10 @@ import { colors, radius } from '../theme/tokens';
 interface SearchBarProps {
   recents: string[];
   onSubmit: (keywords: string) => void;
+  placeholder?: string;
 }
 
-export function SearchBar({ recents, onSubmit }: SearchBarProps) {
+export function SearchBar({ recents, onSubmit, placeholder = 'Search people' }: SearchBarProps) {
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
   const showRecents = focused && recents.length > 0;
@@ -30,7 +31,7 @@ export function SearchBar({ recents, onSubmit }: SearchBarProps) {
         style={styles.input}
         value={value}
         onChangeText={setValue}
-        placeholder="Search people"
+        placeholder={placeholder}
         placeholderTextColor={colors.muted}
         returnKeyType="search"
         autoCapitalize="none"

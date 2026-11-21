@@ -1,7 +1,7 @@
 // The X URL table (Denis, 21 Nov 2026): posting, replies, messages,
-// notifications, single posts and profiles work; the home timeline,
-// explore, search, hashtags, lists, communities, bookmarks and trends never
-// show. Shared by the decide() unit test and the parity tests.
+// notifications, search, single posts, profiles with their posts and
+// bookmarks work; the home timeline, explore, lists, communities and trends
+// never show. Shared by the decide() unit test and the parity tests.
 
 import type { DecideRow } from './linkedin-table';
 
@@ -19,11 +19,9 @@ export const X_DECIDE_TABLE: DecideRow[] = [
   // Feeds (rule x-6)
   { name: 'explore redirects', url: 'https://x.com/explore', expected: toMessages },
   { name: 'explore tabs redirect', url: 'https://x.com/explore/tabs/for-you', expected: toMessages },
-  { name: 'search results redirect', url: 'https://x.com/search?q=news&src=typed_query', expected: toMessages },
-  { name: 'a hashtag redirects', url: 'https://x.com/hashtag/news', expected: toMessages },
+  { name: 'search with nothing typed redirects (it is explore)', url: 'https://x.com/search', expected: toMessages },
   { name: 'a list timeline redirects', url: 'https://x.com/i/lists/123', expected: toMessages },
   { name: 'communities redirect', url: 'https://x.com/i/communities/123', expected: toMessages },
-  { name: 'bookmarks redirect', url: 'https://x.com/i/bookmarks', expected: toMessages },
   { name: 'trends redirect', url: 'https://x.com/i/trends', expected: toMessages },
   // Kept (rules x-1 to x-4 and the fallback)
   { name: 'the login flow allowed', url: 'https://x.com/i/flow/login', expected: ALLOW },
@@ -41,6 +39,11 @@ export const X_DECIDE_TABLE: DecideRow[] = [
   { name: 'a single post allowed', url: 'https://x.com/someone/status/1234567890', expected: ALLOW },
   { name: 'a post photo allowed', url: 'https://x.com/someone/status/1234567890/photo/1', expected: ALLOW },
   { name: 'a profile allowed', url: 'https://x.com/someone', expected: ALLOW },
+  { name: 'search results allowed', url: 'https://x.com/search?q=news&src=typed_query', expected: ALLOW },
+  { name: 'latest search results allowed', url: 'https://x.com/search?q=news&f=live', expected: ALLOW },
+  { name: 'a hashtag allowed (it is a search)', url: 'https://x.com/hashtag/news', expected: ALLOW },
+  { name: 'bookmarks allowed (your own saved posts)', url: 'https://x.com/i/bookmarks', expected: ALLOW },
+  { name: 'a profile with its replies allowed', url: 'https://x.com/someone/with_replies', expected: ALLOW },
   { name: 'Grok is not a feed and stays', url: 'https://x.com/i/grok', expected: ALLOW },
   { name: 'images load', url: 'https://pbs.twimg.com/media/abc.jpg', expected: ALLOW },
   { name: 'another site opens outside', url: 'https://example.com/', expected: EXTERNAL },
